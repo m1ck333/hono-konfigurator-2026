@@ -9,12 +9,31 @@ import {
   requireAdmin,
   type JwtUser,
 } from "./auth";
+import { sendInquiryEmail } from "./email";
 
-type Bindings = { DB: D1Database; ASSETS: R2Bucket; JWT_SECRET: string };
+type Bindings = {
+  DB: D1Database;
+  ASSETS: R2Bucket;
+  JWT_SECRET: string;
+  ALLOWED_ORIGIN?: string;
+  RESEND_API_KEY?: string;
+  INQUIRY_FROM?: string;
+  INQUIRY_TO?: string;
+};
 type Variables = { user: JwtUser };
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
-app.use("*", cors());
+
+app.use("*", (c, next) =>
+  cors({ origin: c.env.ALLOWED_ORIGIN || "*", credentials: true })(c, next)
+);
+
+// Clean JSON errors instead of stack traces / HTML.
+app.onError((err, c) => {
+  console.error("unhandled error", err);
+  return c.json({ error: "internal error" }, 500);
+});
+app.notFound((c) => c.json({ error: "not found" }, 404));
 
 interface Config { modelId: number; equipment?: number[] }
 
@@ -120,7 +139,8 @@ app.post("/api/submit-inquiry", async (c) => {
   const b = await c.req.json<any>();
   await c.env.DB.prepare("INSERT INTO inquiries (name,email,phone,message,config) VALUES (?,?,?,?,?)")
     .bind(b.name ?? null, b.email ?? null, b.phone ?? null, b.message ?? null, JSON.stringify(b.config ?? {})).run();
-  // TODO: send notification email (MailChannels / Resend). Stored in D1 for now.
+  // fire-and-forget email notification (no-op unless RESEND_API_KEY is configured)
+  c.executionCtx.waitUntil(sendInquiryEmail(c.env, b));
   return c.json({ ok: true });
 });
 

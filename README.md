@@ -50,7 +50,15 @@ and point the frontend's `REACT_APP_API_URL` at it.
 
 > Requires **Workers Paid** ($5/mo) — the door render is ~40ms CPU, over the free 10ms cap.
 
+## Env vars (wrangler.jsonc `vars` / secrets)
+- `JWT_SECRET` (secret) — token signing.
+- `ALLOWED_ORIGIN` — CORS origin for the FE (default `*`).
+- `RESEND_API_KEY` (secret), `INQUIRY_FROM`, `INQUIRY_TO` — enable inquiry emails (Resend).
+  If unset, inquiries are still stored in D1; email is just skipped.
+
 ## Notes / TODO
-- Inquiry emails are stored in D1 only; wire MailChannels/Resend to actually send.
+- Inquiry email is wired (Resend, best-effort, fire-and-forget) — set the 3 vars above to enable.
 - Passwords use PBKDF2 (not bcrypt) — migrated users need a password reset.
 - Equipment `anchor_x/anchor_y` (0..1 fractions) position overlays; set per item in admin.
+- Full-compositing parity port (all Laravel door types/color/glass) is feasible (see the POC)
+  but intentionally NOT built — product is moving to Model B, so it'd be throwaway.
