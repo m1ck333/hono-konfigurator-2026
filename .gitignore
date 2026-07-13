@@ -1,0 +1,6 @@
+node_modules
+.wrangler
+.dev.vars
+out.png
+*.log
+.DS_Store

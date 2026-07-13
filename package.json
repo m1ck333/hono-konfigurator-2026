@@ -1,0 +1,19 @@
+{
+  "name": "hono-konfigurator-be",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:local": "wrangler d1 execute konfigurator --local --file=./migrations/0001_init.sql && wrangler d1 execute konfigurator --local --file=./migrations/0002_seed.sql"
+  },
+  "dependencies": {
+    "@silvia-odwyer/photon": "^0.3.3",
+    "hono": "^4.12.30"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260713.1",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.110.0"
+  }
+}
