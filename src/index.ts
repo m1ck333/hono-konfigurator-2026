@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { cors } from "hono/cors";
 import {
   hashPassword,
@@ -36,7 +37,41 @@ app.onError((err, c) => {
   console.error("unhandled error", err);
   return c.json({ error: "internal error" }, 500);
 });
-app.notFound((c) => c.json({ error: "not found" }, 404));
+// Asset resolver — the FE builds image URLs three inconsistent ways:
+//   `${API}/<key>`  `${API}/storage/<key>`  `${API}/api/<key>`
+// All must resolve to the same clean R2 key. Strip the FE prefix and look it up.
+function assetCandidates(rawPath: string): string[] {
+  let p = decodeURIComponent(rawPath).replace(/^\/+/, "");
+  p = p.replace(/^storage\//, "").replace(/^api\//, "");
+  const cands = [p];
+  // EquipmentGroup fallback requests `thumbnails/equipment/...`; our keys are `equipment/...`
+  if (p.startsWith("thumbnails/equipment/")) cands.push(p.replace(/^thumbnails\//, ""));
+  return cands;
+}
+async function serveAsset(c: Context<{ Bindings: Bindings; Variables: Variables }>, rawPath: string): Promise<Response | null> {
+  for (const key of assetCandidates(rawPath)) {
+    const obj = await c.env.ASSETS.get(key);
+    if (obj) {
+      return new Response(obj.body, {
+        headers: {
+          "content-type": obj.httpMetadata?.contentType || "image/png",
+          "cache-control": "public, max-age=31536000",
+          etag: obj.httpEtag,
+        },
+      });
+    }
+  }
+  return null;
+}
+
+// Any unmatched GET whose path maps to an R2 object is served as that asset.
+app.notFound(async (c) => {
+  if (c.req.method === "GET") {
+    const asset = await serveAsset(c, c.req.path);
+    if (asset) return asset;
+  }
+  return c.json({ error: "not found" }, 404);
+});
 
 interface Config { modelId: number; equipment?: number[] }
 
@@ -48,16 +83,7 @@ registerCatalog(app as never);
 
 // ============================================================ asset serving (R2, replaces /storage symlink)
 app.get("/storage/*", async (c) => {
-  const key = decodeURIComponent(c.req.path.replace(/^\/storage\//, ""));
-  const obj = await c.env.ASSETS.get(key);
-  if (!obj) return c.json({ error: "not found" }, 404);
-  return new Response(obj.body, {
-    headers: {
-      "content-type": obj.httpMetadata?.contentType || "image/png",
-      "cache-control": "public, max-age=31536000",
-      etag: obj.httpEtag,
-    },
-  });
+  return (await serveAsset(c, c.req.path)) ?? c.json({ error: "not found" }, 404);
 });
 
 // ============================================================ render (full DoorBuilder parity)

@@ -59,6 +59,9 @@ export function registerCatalog(app: Hono<Env>) {
     c.json({ success: true, equipment_systems: await withTranslations(c.env.DB, await all(c.env.DB, "SELECT * FROM equipment_systems ORDER BY sort_order"), "equipment_system_translations", "equipment_id") }));
   app.get("/api/equipment-glasses", async (c) =>
     c.json({ success: true, equipment_glasses: await withTranslations(c.env.DB, await all(c.env.DB, "SELECT * FROM equipment_glasses ORDER BY sort_order"), "equipment_glass_translations", "glass_id") }));
+  // default-glass: FE fetchDefaultGlass expects a BARE array of the is_default glasses (with translations)
+  app.get("/api/default-glass", async (c) =>
+    c.json(await withTranslations(c.env.DB, await all(c.env.DB, "SELECT * FROM equipment_glasses WHERE is_default=1 ORDER BY sort_order"), "equipment_glass_translations", "glass_id")));
   app.get("/api/equipment-locks", async (c) =>
     c.json({ success: true, equipment_locks: await withTranslations(c.env.DB, await all(c.env.DB, "SELECT * FROM equipment_locks ORDER BY sort_order"), "equipment_lock_translations", "lock_id") }));
 
