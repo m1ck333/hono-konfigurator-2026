@@ -4,3 +4,8 @@ node_modules
 out.png
 *.log
 .DS_Store
+
+# test artifacts
+be.png
+ref.png
+validate-side-by-side.png

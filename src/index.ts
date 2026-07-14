@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { renderDoor, type Overlay } from "./render";
 import {
   hashPassword,
   verifyPassword,
@@ -10,6 +9,7 @@ import {
   type JwtUser,
 } from "./auth";
 import { sendInquiryEmail } from "./email";
+import { buildDoorImage, type DoorConfig, type AssetLoader } from "./doorbuilder";
 
 type Bindings = {
   DB: D1Database;
@@ -50,36 +50,16 @@ app.get("/api/catalog", async (c) => {
   return c.json({ models: models.results, categories: categories.results, equipment: equipment.results });
 });
 
-// ============================================================ render
+// ============================================================ render (full DoorBuilder parity)
 app.post("/api/door/image", async (c) => {
-  const body = await c.req.json<Config>();
-  const model = await c.env.DB.prepare("SELECT * FROM models WHERE id=?").bind(body.modelId).first<any>();
-  if (!model) return c.json({ error: "model not found" }, 404);
-
-  const modelObj = await c.env.ASSETS.get(model.image_key);
-  if (!modelObj) {
-    console.error("missing model image", model.image_key);
-    return c.json({ error: "model image missing" }, 404);
-  }
-  const modelBytes = new Uint8Array(await modelObj.arrayBuffer());
-
-  const overlays: Overlay[] = [];
-  for (const eqId of body.equipment ?? []) {
-    const eq = await c.env.DB.prepare("SELECT * FROM equipment WHERE id=?").bind(eqId).first<any>();
-    if (!eq) continue;
-    const obj = await c.env.ASSETS.get(eq.image_key);
-    if (!obj) {
-      console.error("missing equipment image", eq.image_key);
-      continue;
-    }
-    overlays.push({
-      bytes: new Uint8Array(await obj.arrayBuffer()),
-      x: eq.anchor_x * model.width,
-      y: eq.anchor_y * model.height,
-    });
-  }
-
-  const png = await renderDoor(modelBytes, overlays);
+  const config = await c.req.json<DoorConfig>();
+  const assets: AssetLoader = {
+    get: async (key) => {
+      const obj = await c.env.ASSETS.get(key);
+      return obj ? new Uint8Array(await obj.arrayBuffer()) : null;
+    },
+  };
+  const png = await buildDoorImage(config, assets);
   return new Response(png, { headers: { "content-type": "image/png", "cache-control": "no-store" } });
 });
 
