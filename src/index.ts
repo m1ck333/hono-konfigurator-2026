@@ -89,9 +89,17 @@ app.get("/storage/*", async (c) => {
 // ============================================================ render (full DoorBuilder parity)
 app.post("/api/door/image", async (c) => {
   const config = await c.req.json<DoorConfig>();
-  // Laravel's BaseDoorCreator reads door.has_glass from the DB — do the same
-  const door = await c.env.DB.prepare("SELECT has_glass FROM doors WHERE id=?").bind(config["model-id"]).first<{ has_glass: number }>();
+  // Laravel reads has_glass + the door's default color from the DB.
+  const door = await c.env.DB
+    .prepare("SELECT d.has_glass, c.color_hex FROM doors d LEFT JOIN colors c ON c.id = d.color_id WHERE d.id = ?")
+    .bind(config["model-id"])
+    .first<{ has_glass: number; color_hex: string | null }>();
   config.has_glass = door?.has_glass ?? 0;
+  // Match DoorBuilder.php:65-66 — panel/frame fall back to the door's own color_hex
+  // (NOT hardcoded gray) when the client doesn't send an explicit color.
+  const defaultHex = door?.color_hex || "#3f4145";
+  if (!config["panel-color"]) config["panel-color"] = defaultHex;
+  if (!config["frame-color"]) config["frame-color"] = defaultHex;
   const assets: AssetLoader = {
     get: async (key) => {
       const obj = await c.env.ASSETS.get(key);
