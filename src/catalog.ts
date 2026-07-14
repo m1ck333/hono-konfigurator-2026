@@ -42,17 +42,17 @@ export function registerCatalog(app: Hono<Env>) {
     return c.json({ success: true, doors });
   });
 
-  // ---- colors + categories ----
+  // ---- colors + categories (Laravel returns BARE arrays here) ----
   app.get("/api/colors", async (c) => {
     const colors = await all(c.env.DB, "SELECT * FROM colors ORDER BY sort_order IS NULL, sort_order ASC");
     for (const col of colors) {
       const cat = col.color_category_id ? await c.env.DB.prepare("SELECT * FROM color_categories WHERE id=?").bind(col.color_category_id).first<any>() : null;
       col.color_category = cat ? { ...cat, translations: await all(c.env.DB, `SELECT * FROM color_category_translations WHERE color_category_id=${cat.id}`) } : null;
     }
-    return c.json({ success: true, colors });
+    return c.json(colors);
   });
   app.get("/api/color-categories", async (c) =>
-    c.json({ success: true, color_categories: await withTranslations(c.env.DB, await all(c.env.DB, "SELECT * FROM color_categories ORDER BY sort_order"), "color_category_translations", "color_category_id") }));
+    c.json(await withTranslations(c.env.DB, await all(c.env.DB, "SELECT * FROM color_categories ORDER BY sort_order"), "color_category_translations", "color_category_id")));
 
   // ---- equipment (flat) ----
   app.get("/api/equipment-systems", async (c) =>
@@ -79,12 +79,15 @@ export function registerCatalog(app: Hono<Env>) {
       grouped[name].equipments.push({ ...e, sr_name: srName });
       if (e.subcategory) (grouped[name].groupedBySubcategory[e.subcategory] ??= []).push(e);
     }
-    return c.json({ success: true, equipment_others: grouped });
+    // subcategory parent items (is_subcategory=1), each with category {id,name} — matches Laravel
+    const subcategories = await withTranslations(db, await all(db, "SELECT * FROM equipment_others WHERE is_subcategory=1 ORDER BY sort_order"), "equipment_other_translations", "equipment_id");
+    for (const s of subcategories) s.category = { id: s.category_id, name: catName(s.category_id) };
+    return c.json({ success: true, equipment_others: grouped, subcategories });
   });
   app.get("/api/equipment-other-categories", async (c) =>
-    c.json({ success: true, equipment_other_categories: await all(c.env.DB, "SELECT * FROM equipment_other_categories") }));
+    c.json({ success: true, categories: await all(c.env.DB, "SELECT * FROM equipment_other_categories") }));
 
   // ---- houses ----
   app.get("/api/houses", async (c) => c.json({ success: true, houses: await all(c.env.DB, "SELECT * FROM houses") }));
-  app.get("/api/house-colors", async (c) => c.json({ success: true, house_colors: await all(c.env.DB, "SELECT * FROM house_colors ORDER BY sort_order") }));
+  app.get("/api/house-colors", async (c) => c.json({ success: true, colors: await all(c.env.DB, "SELECT * FROM house_colors ORDER BY id") }));
 }
