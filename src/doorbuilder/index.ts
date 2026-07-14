@@ -5,8 +5,6 @@ import {
   centerClip,
   insertAnchor,
   frameElement,
-  resize,
-  SamplingFilter,
   fliph,
   wm,
   type AssetLoader,
@@ -92,8 +90,10 @@ export async function applyFrame(assembly: PhotonImage, config: DoorConfig, asse
   insertAnchor(assembly, left, "left", 0, 0);
   const right = await frameElement("frame/side-R.png", FRAME_WIDTH, H, frameColor, assets);
   insertAnchor(assembly, right, "right", 0, 0);
-  const topTex = await assets.get("frame/side-LT.png");
-  if (topTex) insertAnchor(assembly, resize(load(topTex), W, FRAME_WIDTH, SamplingFilter.Triangle), "top", 0, 0);
+  // top frame must be COLOR-filled (side-LT.png is a light, ~4%-opacity highlight texture, not
+  // the frame itself) — else it lets whatever is under it (e.g. transom glass) show through.
+  const top = await frameElement("frame/side-LT.png", W, FRAME_WIDTH, frameColor, assets);
+  insertAnchor(assembly, top, "top", 0, 0);
   const cornerL = await assets.get("frame/corner-L.png");
   if (cornerL) insertAnchor(assembly, load(cornerL), "top-left", 0, 0);
   const cornerR = await assets.get("frame/corner-R.png");

@@ -149,10 +149,11 @@ async function addTransom(image: PhotonImage, config: DoorConfig, assets: AssetL
   const glass = fitCover(load(glassBytes), width, upperGlassHeight);
   const pillar = await frameElement("frame/pillar-H.png", width, pillarWidth, frameColor, assets);
 
-  // stack top→bottom: glass, horizontal frame bar, then the existing door image
+  // frame-colored base; glass sits BELOW the top frame band (offset by pillarWidth) so the
+  // outer top frame has a dark band to cover — matches Laravel (glass inset, not edge-to-edge).
   const canvas = await coloredCanvas(frameColor, width, image.get_height() + upperGlassHeight + pillarWidth, assets);
-  wm(canvas, glass, 0, 0);
-  wm(canvas, pillar, 0, upperGlassHeight);
-  wm(canvas, image, 0, upperGlassHeight + pillarWidth);
+  wm(canvas, glass, 0, pillarWidth);                    // glass, offset down → dark top band
+  wm(canvas, pillar, 0, upperGlassHeight);              // horizontal frame bar under the glass
+  wm(canvas, image, 0, upperGlassHeight + pillarWidth); // door below
   return canvas;
 }
