@@ -33,7 +33,7 @@ export function registerPrice(app: Hono<Env>) {
     // markups
     let adminMarkup = 0;
     if (user.role !== "admin") {
-      const row = await db.prepare("SELECT m.markup_value AS v FROM markups m JOIN users u ON u.id=m.user_id WHERE u.role='admin' AND m.default=1 LIMIT 1").first<{ v: number }>();
+      const row = await db.prepare("SELECT m.markup_value AS v FROM markups m JOIN users u ON u.id=m.user_id WHERE u.role='admin' AND CAST(m.\"default\" AS INTEGER)=1 LIMIT 1").first<{ v: number }>();
       adminMarkup = row?.v ?? 0;
     }
     const um = await db.prepare("SELECT markup_value AS v FROM markups WHERE user_id=? AND markup_label=? LIMIT 1").bind(user.id, d.markupLabel ?? "default").first<{ v: number }>();
