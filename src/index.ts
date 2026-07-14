@@ -50,6 +50,20 @@ app.get("/api/catalog", async (c) => {
   return c.json({ models: models.results, categories: categories.results, equipment: equipment.results });
 });
 
+// ============================================================ asset serving (R2, replaces /storage symlink)
+app.get("/storage/*", async (c) => {
+  const key = decodeURIComponent(c.req.path.replace(/^\/storage\//, ""));
+  const obj = await c.env.ASSETS.get(key);
+  if (!obj) return c.json({ error: "not found" }, 404);
+  return new Response(obj.body, {
+    headers: {
+      "content-type": obj.httpMetadata?.contentType || "image/png",
+      "cache-control": "public, max-age=31536000",
+      etag: obj.httpEtag,
+    },
+  });
+});
+
 // ============================================================ render (full DoorBuilder parity)
 app.post("/api/door/image", async (c) => {
   const config = await c.req.json<DoorConfig>();
