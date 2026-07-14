@@ -16,16 +16,25 @@ const all = async (db: D1Database, sql: string) => (await db.prepare(sql).all())
 
 // attach the dmodels relation (via the dmodel_door pivot) to each door — the DoorModel
 // sidebar uses door.dmodels[].suffix to build the display name (e.g. "1155-AG").
+// Batched: ONE join query, grouped in JS (D1 round-trips are the bottleneck — never N+1).
 async function attachDmodels(db: D1Database, doors: any[]) {
-  for (const d of doors) {
-    const rows = await all(db,
-      `SELECT dm.id, dm.dmodel_name, dm.suffix, dd.door_id, dd.dmodel_id
-       FROM dmodels dm JOIN dmodel_door dd ON dd.dmodel_id = dm.id WHERE dd.door_id = ${d.id}`);
-    d.dmodels = rows.map((r) => ({
-      id: r.id, dmodel_name: r.dmodel_name, suffix: r.suffix,
-      pivot: { door_id: r.door_id, dmodel_id: r.dmodel_id },
-    }));
-  }
+  const links = await all(db,
+    `SELECT dd.door_id, dd.dmodel_id, dm.id, dm.dmodel_name, dm.suffix
+     FROM dmodel_door dd JOIN dmodels dm ON dm.id = dd.dmodel_id`);
+  const byDoor: Record<number, any[]> = {};
+  for (const r of links) (byDoor[r.door_id] ??= []).push({
+    id: r.id, dmodel_name: r.dmodel_name, suffix: r.suffix,
+    pivot: { door_id: r.door_id, dmodel_id: r.dmodel_id },
+  });
+  for (const d of doors) d.dmodels = byDoor[d.id] ?? [];
+}
+
+// attach each row's `color` from the colors table — batched (one query, map in JS).
+async function attachColors(db: D1Database, rows: any[]) {
+  const colors = await all(db, "SELECT * FROM colors");
+  const byId: Record<number, any> = {};
+  for (const c of colors) byId[c.id] = c;
+  for (const r of rows) r.color = r.color_id ? (byId[r.color_id] ?? null) : null;
 }
 
 // equipment_other category id -> canonical FE code (mirrors the migration)
@@ -52,18 +61,23 @@ export function registerCatalog(app: Hono<Env>) {
   // ---- doors ----
   app.get("/api/doors", async (c) => {
     const doors = await all(c.env.DB, "SELECT * FROM doors ORDER BY sort_order IS NULL, sort_order ASC");
-    for (const d of doors) d.color = await c.env.DB.prepare("SELECT * FROM colors WHERE id=?").bind(d.color_id).first();
+    await attachColors(c.env.DB, doors);
     await attachDmodels(c.env.DB, doors);
     return c.json({ success: true, doors });
   });
 
   // ---- colors + categories (Laravel returns BARE arrays here) ----
   app.get("/api/colors", async (c) => {
-    const colors = await all(c.env.DB, "SELECT * FROM colors ORDER BY sort_order IS NULL, sort_order ASC");
-    for (const col of colors) {
-      const cat = col.color_category_id ? await c.env.DB.prepare("SELECT * FROM color_categories WHERE id=?").bind(col.color_category_id).first<any>() : null;
-      col.color_category = cat ? { ...cat, translations: await all(c.env.DB, `SELECT * FROM color_category_translations WHERE color_category_id=${cat.id}`) } : null;
-    }
+    const db = c.env.DB;
+    // 3 queries total (colors + categories + category-translations), grouped in JS — NOT N+1.
+    const colors = await all(db, "SELECT * FROM colors ORDER BY sort_order IS NULL, sort_order ASC");
+    const cats = await all(db, "SELECT * FROM color_categories");
+    const trans = await all(db, "SELECT * FROM color_category_translations");
+    const transByCat: Record<number, any[]> = {};
+    for (const t of trans) (transByCat[t.color_category_id] ??= []).push(t);
+    const catById: Record<number, any> = {};
+    for (const cat of cats) catById[cat.id] = { ...cat, translations: transByCat[cat.id] ?? [] };
+    for (const col of colors) col.color_category = col.color_category_id ? (catById[col.color_category_id] ?? null) : null;
     return c.json(colors);
   });
   app.get("/api/color-categories", async (c) =>
