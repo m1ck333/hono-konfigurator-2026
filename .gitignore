@@ -13,3 +13,6 @@ validate-side-by-side.png
 # migration data dump (sensitive: user hashes) — kept local
 migrate/data/
 migrate/out/
+
+# generated catalog seed (has user data — regenerate via migrate/build.mjs)
+migrations/0002_catalog_seed.sql
