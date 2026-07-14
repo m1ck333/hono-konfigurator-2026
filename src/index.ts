@@ -12,6 +12,7 @@ import { sendInquiryEmail } from "./email";
 import { buildDoorImage, type DoorConfig, type AssetLoader } from "./doorbuilder";
 import { registerCatalog } from "./catalog";
 import { registerPrice } from "./price";
+import { registerAdmin } from "./admin";
 
 type Bindings = {
   DB: D1Database;
@@ -111,7 +112,7 @@ app.post("/api/login", async (c) => {
   const { username, password } = await c.req.json<{ username: string; password: string }>();
   if (!username || !password) return c.json({ error: "username and password required" }, 400);
   const user = await c.env.DB.prepare("SELECT * FROM users WHERE username=?").bind(username).first<any>();
-  if (!user || !(await verifyPassword(password, user.password_hash))) {
+  if (!user || !(await verifyPassword(password, user.password))) {
     return c.json({ error: "invalid credentials" }, 401);
   }
   const token = await signToken(c.env.JWT_SECRET, { id: user.id, username: user.username, role: user.role });
@@ -120,137 +121,12 @@ app.post("/api/login", async (c) => {
 
 app.get("/api/me", requireAuth, (c) => c.json({ user: c.get("user") }));
 
-// ============================================================ admin (auth + admin)
-app.use("/api/admin/*", requireAuth, requireAdmin);
+// ============================================================ admin (catalog CRUD + users + markups)
+registerAdmin(app as never);
 
-// ---- users ----
-app.get("/api/admin/users", async (c) => {
-  const r = await c.env.DB.prepare("SELECT id, username, role FROM users ORDER BY id").all();
-  return c.json({ users: r.results });
-});
-app.post("/api/admin/users", async (c) => {
-  const { username, password, role } = await c.req.json<any>();
-  if (!username || !password) return c.json({ error: "username and password required" }, 400);
-  try {
-    const r = await c.env.DB.prepare("INSERT INTO users (username, password_hash, role) VALUES (?,?,?)")
-      .bind(username, await hashPassword(password), role || "user").run();
-    return c.json({ id: r.meta.last_row_id, username, role: role || "user" }, 201);
-  } catch (e) { console.error(e); return c.json({ error: "username taken" }, 409); }
-});
-app.put("/api/admin/users/:id", async (c) => {
-  const id = Number(c.req.param("id"));
-  const { username, password, role } = await c.req.json<any>();
-  if (password) {
-    await c.env.DB.prepare("UPDATE users SET username=COALESCE(?,username), role=COALESCE(?,role), password_hash=? WHERE id=?")
-      .bind(username ?? null, role ?? null, await hashPassword(password), id).run();
-  } else {
-    await c.env.DB.prepare("UPDATE users SET username=COALESCE(?,username), role=COALESCE(?,role) WHERE id=?")
-      .bind(username ?? null, role ?? null, id).run();
-  }
-  return c.json({ ok: true });
-});
-app.delete("/api/admin/users/:id", async (c) => {
-  await c.env.DB.prepare("DELETE FROM users WHERE id=?").bind(Number(c.req.param("id"))).run();
-  return c.json({ ok: true });
-});
-
-// ---- models ----
-app.get("/api/admin/models", async (c) => {
-  const r = await c.env.DB.prepare("SELECT * FROM models ORDER BY sort_order").all();
-  return c.json({ models: r.results });
-});
-app.post("/api/admin/models", async (c) => {
-  const b = await c.req.json<any>();
-  const r = await c.env.DB.prepare(
-    "INSERT INTO models (name, image_key, inner_image_key, price, width, height, is_shown, sort_order) VALUES (?,?,?,?,?,?,?,?)"
-  ).bind(b.name, b.image_key ?? "", b.inner_image_key ?? null, b.price ?? 0, b.width ?? 0, b.height ?? 0, b.is_shown ?? 1, b.sort_order ?? 0).run();
-  return c.json({ id: r.meta.last_row_id }, 201);
-});
-app.put("/api/admin/models/:id", async (c) => {
-  const id = Number(c.req.param("id"));
-  const b = await c.req.json<any>();
-  await c.env.DB.prepare(
-    "UPDATE models SET name=COALESCE(?,name), price=COALESCE(?,price), width=COALESCE(?,width), height=COALESCE(?,height), is_shown=COALESCE(?,is_shown), sort_order=COALESCE(?,sort_order) WHERE id=?"
-  ).bind(b.name ?? null, b.price ?? null, b.width ?? null, b.height ?? null, b.is_shown ?? null, b.sort_order ?? null, id).run();
-  return c.json({ ok: true });
-});
-app.delete("/api/admin/models/:id", async (c) => {
-  await c.env.DB.prepare("DELETE FROM models WHERE id=?").bind(Number(c.req.param("id"))).run();
-  return c.json({ ok: true });
-});
-// upload/replace a model's finished image (raw PNG body)
-app.put("/api/admin/models/:id/image", async (c) => {
-  const id = Number(c.req.param("id"));
-  const key = `models/${id}.png`;
-  await c.env.ASSETS.put(key, await c.req.arrayBuffer(), { httpMetadata: { contentType: "image/png" } });
-  await c.env.DB.prepare("UPDATE models SET image_key=? WHERE id=?").bind(key, id).run();
-  return c.json({ ok: true, image_key: key });
-});
-
-// ---- equipment ----
-app.get("/api/admin/equipment", async (c) => {
-  const r = await c.env.DB.prepare("SELECT * FROM equipment ORDER BY sort_order").all();
-  return c.json({ equipment: r.results });
-});
-app.post("/api/admin/equipment", async (c) => {
-  const b = await c.req.json<any>();
-  const r = await c.env.DB.prepare(
-    "INSERT INTO equipment (category_id, name, image_key, price, anchor_x, anchor_y, is_shown, sort_order) VALUES (?,?,?,?,?,?,?,?)"
-  ).bind(b.category_id, b.name, b.image_key ?? "", b.price ?? 0, b.anchor_x ?? 0, b.anchor_y ?? 0, b.is_shown ?? 1, b.sort_order ?? 0).run();
-  return c.json({ id: r.meta.last_row_id }, 201);
-});
-app.put("/api/admin/equipment/:id", async (c) => {
-  const id = Number(c.req.param("id"));
-  const b = await c.req.json<any>();
-  await c.env.DB.prepare(
-    "UPDATE equipment SET name=COALESCE(?,name), price=COALESCE(?,price), anchor_x=COALESCE(?,anchor_x), anchor_y=COALESCE(?,anchor_y), is_shown=COALESCE(?,is_shown), sort_order=COALESCE(?,sort_order) WHERE id=?"
-  ).bind(b.name ?? null, b.price ?? null, b.anchor_x ?? null, b.anchor_y ?? null, b.is_shown ?? null, b.sort_order ?? null, id).run();
-  return c.json({ ok: true });
-});
-app.delete("/api/admin/equipment/:id", async (c) => {
-  await c.env.DB.prepare("DELETE FROM equipment WHERE id=?").bind(Number(c.req.param("id"))).run();
-  return c.json({ ok: true });
-});
-app.put("/api/admin/equipment/:id/image", async (c) => {
-  const id = Number(c.req.param("id"));
-  const key = `equipment/${id}.png`;
-  await c.env.ASSETS.put(key, await c.req.arrayBuffer(), { httpMetadata: { contentType: "image/png" } });
-  await c.env.DB.prepare("UPDATE equipment SET image_key=? WHERE id=?").bind(key, id).run();
-  return c.json({ ok: true, image_key: key });
-});
-
-// ---- markups (admin) ----
-app.get("/api/admin/markups", async (c) => {
-  const r = await c.env.DB.prepare("SELECT * FROM markups ORDER BY id").all();
-  return c.json({ markups: r.results });
-});
-app.post("/api/admin/markups", async (c) => {
-  const b = await c.req.json<any>();
-  const r = await c.env.DB.prepare("INSERT INTO markups (user_id, markup_label, markup_value, is_default) VALUES (?,?,?,?)")
-    .bind(b.user_id, b.markup_label ?? "default", b.markup_value ?? 0, b.is_default ?? 0).run();
-  return c.json({ id: r.meta.last_row_id }, 201);
-});
-app.put("/api/admin/markups/:id", async (c) => {
-  const b = await c.req.json<any>();
-  await c.env.DB.prepare("UPDATE markups SET markup_label=COALESCE(?,markup_label), markup_value=COALESCE(?,markup_value), is_default=COALESCE(?,is_default) WHERE id=?")
-    .bind(b.markup_label ?? null, b.markup_value ?? null, b.is_default ?? null, Number(c.req.param("id"))).run();
-  return c.json({ ok: true });
-});
-app.delete("/api/admin/markups/:id", async (c) => {
-  await c.env.DB.prepare("DELETE FROM markups WHERE id=?").bind(Number(c.req.param("id"))).run();
-  return c.json({ ok: true });
-});
-
-// ---- printed contents + inquiries (admin) ----
-app.get("/api/admin/printed-contents", async (c) => {
-  const r = await c.env.DB.prepare(
-    "SELECT pc.id, pc.user_id, u.username, pc.created_at FROM printed_contents pc JOIN users u ON u.id=pc.user_id ORDER BY pc.id DESC"
-  ).all();
-  return c.json({ printedContents: r.results });
-});
-app.get("/api/admin/inquiries", async (c) => {
-  const r = await c.env.DB.prepare("SELECT * FROM inquiries ORDER BY id DESC").all();
-  return c.json({ inquiries: r.results });
-});
+app.get("/api/admin/inquiries", requireAuth, requireAdmin, async (c) =>
+  c.json({ inquiries: (await c.env.DB.prepare("SELECT * FROM inquiries ORDER BY id DESC").all()).results }));
+app.get("/api/admin/printed-contents", requireAuth, requireAdmin, async (c) =>
+  c.json({ printedContents: (await c.env.DB.prepare("SELECT pc.id, pc.user_id, u.username, pc.created_at FROM printed_contents pc JOIN users u ON u.id=pc.user_id ORDER BY pc.id DESC").all()).results }));
 
 export default app;
