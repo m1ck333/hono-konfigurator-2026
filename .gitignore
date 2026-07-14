@@ -18,3 +18,4 @@ migrate/out/
 migrations/0002_catalog_seed.sql
 
 migrate/r2-staging/
+.r2-staging/
