@@ -9,10 +9,12 @@
   },
   "dependencies": {
     "@silvia-odwyer/photon": "^0.3.3",
+    "bcryptjs": "^3.0.3",
     "hono": "^4.12.30"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260713.1",
+    "@types/bcryptjs": "^2.4.6",
     "sharp": "^0.35.3",
     "typescript": "^7.0.2",
     "wrangler": "^4.110.0"

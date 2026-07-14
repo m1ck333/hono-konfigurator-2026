@@ -1,5 +1,6 @@
 import { sign, verify } from "hono/jwt";
 import type { Context, Next } from "hono";
+import bcrypt from "bcryptjs";
 
 // PBKDF2 password hashing via Web Crypto (Workers-safe; no bcrypt).
 const enc = new TextEncoder();
@@ -15,6 +16,10 @@ export async function hashPassword(password: string): Promise<string> {
 }
 
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  // migrated Laravel hashes are bcrypt ($2y$); bcryptjs handles $2a/$2b, normalize $2y->$2b
+  if (stored.startsWith("$2")) {
+    return bcrypt.compareSync(password, stored.replace(/^\$2y\$/, "$2b$"));
+  }
   const [algo, iterStr, saltB64, hashB64] = stored.split("$");
   if (algo !== "pbkdf2") return false;
   const key = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]);

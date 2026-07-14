@@ -11,6 +11,7 @@ import {
 import { sendInquiryEmail } from "./email";
 import { buildDoorImage, type DoorConfig, type AssetLoader } from "./doorbuilder";
 import { registerCatalog } from "./catalog";
+import { registerPrice } from "./price";
 
 type Bindings = {
   DB: D1Database;
@@ -71,56 +72,8 @@ app.post("/api/door/image", async (c) => {
   return new Response(png, { headers: { "content-type": "image/png", "cache-control": "no-store" } });
 });
 
-// ============================================================ price (auth — enforces price-visibility rule)
-const round2 = (n: number) => Math.round(n * 100) / 100;
-
-app.post("/api/calculate-price", requireAuth, async (c) => {
-  const user = c.get("user");
-  const body = await c.req.json<Config & { vat?: number; discount?: number; markupLabel?: string }>();
-  const vat = body.vat ?? 0;
-  const discount = body.discount ?? 0;
-  const markupLabel = body.markupLabel ?? "default";
-
-  // admin default markup applies only to non-admin users
-  let adminMarkup = 0;
-  if (user.role !== "admin") {
-    const row = await c.env.DB.prepare(
-      "SELECT m.markup_value AS v FROM markups m JOIN users u ON u.id=m.user_id WHERE u.role='admin' AND m.is_default=1 LIMIT 1"
-    ).first<{ v: number }>();
-    adminMarkup = row?.v ?? 0;
-  }
-  const um = await c.env.DB.prepare("SELECT markup_value AS v FROM markups WHERE user_id=? AND markup_label=? LIMIT 1")
-    .bind(user.id, markupLabel).first<{ v: number }>();
-  const userMarkup = um?.v ?? 0;
-
-  // discount -> admin markup -> user markup -> VAT (mirrors Laravel PriceCalculator)
-  const priceRow = (base: number) => {
-    const withMarkups = base * (1 - discount / 100) * (1 + adminMarkup / 100) * (1 + userMarkup / 100);
-    return { priceWithoutVat: round2(withMarkups), priceWithVat: round2(withMarkups * (1 + vat / 100)) };
-  };
-
-  const model = await c.env.DB.prepare("SELECT price FROM models WHERE id=?").bind(body.modelId).first<{ price: number }>();
-  let equipTotal = 0;
-  for (const id of body.equipment ?? []) {
-    const eq = await c.env.DB.prepare("SELECT price FROM equipment WHERE id=?").bind(id).first<{ price: number }>();
-    if (eq) equipTotal += eq.price;
-  }
-  const modelPrice = priceRow(model?.price ?? 0);
-  const equipmentPrices = priceRow(equipTotal);
-  const baseWithoutVat = round2(modelPrice.priceWithoutVat + equipmentPrices.priceWithoutVat);
-
-  return c.json({
-    data: {
-      modelPrice,
-      equipmentPrices,
-      totalPrice: { priceWithoutVat: baseWithoutVat, priceWithVat: round2(baseWithoutVat * (1 + vat / 100)) },
-      defaultAdminMarkup: adminMarkup,
-      userMarkup,
-      discount,
-      vat,
-    },
-  });
-});
+// ============================================================ price (full parity, auth-gated)
+registerPrice(app as never);
 
 // ============================================================ offers
 app.post("/api/submit-inquiry", async (c) => {
