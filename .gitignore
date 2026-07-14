@@ -16,3 +16,5 @@ migrate/out/
 
 # generated catalog seed (has user data — regenerate via migrate/build.mjs)
 migrations/0002_catalog_seed.sql
+
+migrate/r2-staging/

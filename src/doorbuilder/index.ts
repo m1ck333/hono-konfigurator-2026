@@ -32,6 +32,7 @@ export interface DoorConfig {
   "left-side-glass-number"?: number;
   "right-side-glass-number"?: number;
   interiorDoorShown?: boolean;
+  has_glass?: number; // filled by the render endpoint from the doors table
   [k: string]: unknown;
 }
 
@@ -52,9 +53,9 @@ export async function buildLeaf(
 
   const base = await coloredCanvas(panelColor, width, H, assets);
 
-  const compose = async (key: string, mode: "center" | "manual") => {
+  const compose = async (key: string, mode: "center" | "manual"): Promise<boolean> => {
     const bytes = await assets.get(key);
-    if (!bytes) return;
+    if (!bytes) return false;
     const img = load(bytes);
     if (isHalfPanel) fliph(img);
     if (mode === "center") {
@@ -64,9 +65,15 @@ export async function buildLeaf(
       const fy = Math.trunc((H - img.get_height()) / 2);
       wm(base, img, fx, fy);
     }
+    return true;
   };
 
-  await compose(`${doorDir}/staklo.png`, "center"); // inner glass (default)
+  // inner glass (only if the model has glass): default staklo.png, else sandblast.png
+  if (config.has_glass) {
+    if (!(await compose(`${doorDir}/staklo.png`, "center"))) {
+      await compose(`${doorDir}/sandblast.png`, "center");
+    }
+  }
   await compose(`${doorDir}/udubljenje.png`, "center"); // dent
   await compose(`${doorDir}/okvir.png`, "manual"); // glass frame
   await compose(`${doorDir}/oplata.png`, "manual"); // plating

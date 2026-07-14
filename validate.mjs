@@ -23,6 +23,7 @@ const baseConfig = {
 // each case = overrides merged onto baseConfig
 const CASES = [
   { name: "single-leaf left-inside", cfg: {} },
+  { name: "door 1150 (sandblast glass fallback)", cfg: { "model-id": 1, "model-name": "1150" } },
   { name: "single-leaf left-outside (DIN flip)", cfg: { "DIN-opening-standard": "left-outside" } },
   { name: "single-leaf right-inside (DIN flip)", cfg: { "DIN-opening-standard": "right-inside" } },
   { name: "double-leaf-door", cfg: { type: "double-leaf-door" } },

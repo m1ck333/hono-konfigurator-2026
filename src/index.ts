@@ -62,6 +62,9 @@ app.get("/storage/*", async (c) => {
 // ============================================================ render (full DoorBuilder parity)
 app.post("/api/door/image", async (c) => {
   const config = await c.req.json<DoorConfig>();
+  // Laravel's BaseDoorCreator reads door.has_glass from the DB — do the same
+  const door = await c.env.DB.prepare("SELECT has_glass FROM doors WHERE id=?").bind(config["model-id"]).first<{ has_glass: number }>();
+  config.has_glass = door?.has_glass ?? 0;
   const assets: AssetLoader = {
     get: async (key) => {
       const obj = await c.env.ASSETS.get(key);
