@@ -10,7 +10,7 @@ import {
   type JwtUser,
 } from "./auth";
 import { sendInquiryEmail } from "./email";
-import { buildDoorImage, type DoorConfig, type AssetLoader } from "./doorbuilder";
+import { buildDoorImage, freeArena, type DoorConfig, type AssetLoader } from "./doorbuilder";
 import { registerCatalog } from "./catalog";
 import { registerPrice } from "./price";
 import { registerAdmin } from "./admin";
@@ -86,6 +86,17 @@ app.get("/storage/*", async (c) => {
   return (await serveAsset(c, c.req.path)) ?? c.json({ error: "not found" }, 404);
 });
 
+// Photon renders are memory-heavy (~15-25MB of WASM image buffers each, reclaimed only by
+// GC between requests). Concurrent renders in one isolate sum past the 128MB limit →
+// "Exceeded Memory Limit" 503s. Serialize them per isolate so only one peaks at a time;
+// Cloudflare load-balances across many isolates, so overall throughput still scales.
+let renderQueue: Promise<unknown> = Promise.resolve();
+function queuedRender<T>(fn: () => Promise<T>): Promise<T> {
+  const run = renderQueue.then(fn, fn);
+  renderQueue = run.then(() => {}, () => {});
+  return run;
+}
+
 // ============================================================ render (full DoorBuilder parity)
 app.post("/api/door/image", async (c) => {
   const config = await c.req.json<DoorConfig>();
@@ -106,7 +117,14 @@ app.post("/api/door/image", async (c) => {
       return obj ? new Uint8Array(await obj.arrayBuffer()) : null;
     },
   };
-  const png = await buildDoorImage(config, assets);
+  const png = await queuedRender(async () => {
+    try {
+      // clone the bytes out of WASM memory before freeing the image arena
+      return new Uint8Array(await buildDoorImage(config, assets));
+    } finally {
+      freeArena();
+    }
+  });
   return new Response(png, { headers: { "content-type": "image/png", "cache-control": "no-store" } });
 });
 

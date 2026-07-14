@@ -14,6 +14,8 @@ import {
 } from "./photon";
 import { customizeType } from "./types";
 
+export { freeArena } from "./photon";
+
 export const RATIO = 3.5;
 export const FRAME_WIDTH = 22;
 

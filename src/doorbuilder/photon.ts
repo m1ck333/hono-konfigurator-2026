@@ -1,16 +1,35 @@
 import init, {
   PhotonImage,
   watermark,
-  crop,
-  resize,
+  crop as _crop,
+  resize as _resize,
   fliph,
   SamplingFilter,
 } from "@silvia-odwyer/photon";
 import wasm from "@silvia-odwyer/photon/photon_rs_bg.wasm";
 import { anchorToTopLeft, type Anchor } from "./anchor";
 
-export { PhotonImage, crop, resize, fliph, SamplingFilter };
+export { PhotonImage, fliph, SamplingFilter };
 export type { Anchor };
+
+// --- WASM memory arena ------------------------------------------------------
+// Every PhotonImage holds WASM-linear memory that GC reclaims only between requests,
+// so a single render's intermediates would otherwise pile up (and concurrent renders
+// blow the 128MB isolate cap). We track every image created during a render and free
+// them all once the final PNG bytes are extracted. Safe because the render endpoint
+// serializes renders, so only one render populates the arena at a time.
+let arena: PhotonImage[] = [];
+const track = <T extends PhotonImage>(img: T): T => { arena.push(img); return img; };
+export function freeArena() {
+  for (const img of arena) { try { img.free(); } catch { /* already freed */ } }
+  arena = [];
+}
+
+// tracked wrappers — all image creation funnels through these five primitives.
+export const crop = (img: PhotonImage, x1: number, y1: number, x2: number, y2: number) =>
+  track(_crop(img, x1, y1, x2, y2));
+export const resize = (img: PhotonImage, w: number, h: number, f: SamplingFilter) =>
+  track(_resize(img, w, h, f));
 
 // photon WASM instantiates once per isolate.
 let ready: Promise<unknown> | null = null;
@@ -30,19 +49,19 @@ const hexToRgb = (h: string) => ({
   b: parseInt(h.slice(5, 7), 16),
 });
 
-export const load = (bytes: Uint8Array) => PhotonImage.new_from_byteslice(bytes);
+export const load = (bytes: Uint8Array) => track(PhotonImage.new_from_byteslice(bytes));
 
 export function solid(w: number, h: number, r: number, g: number, b: number) {
   const px = new Uint8Array(w * h * 4);
   for (let i = 0; i < w * h; i++) {
     px[i * 4] = r; px[i * 4 + 1] = g; px[i * 4 + 2] = b; px[i * 4 + 3] = 255;
   }
-  return new PhotonImage(px, w, h);
+  return track(new PhotonImage(px, w, h));
 }
 
 // fully transparent canvas (Intervention Image::canvas(w,h))
 export function blank(w: number, h: number) {
-  return new PhotonImage(new Uint8Array(w * h * 4), w, h);
+  return track(new PhotonImage(new Uint8Array(w * h * 4), w, h));
 }
 
 export const wm = (base: PhotonImage, top: PhotonImage, x: number, y: number) =>
