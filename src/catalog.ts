@@ -14,6 +14,20 @@ async function withTranslations(db: D1Database, rows: any[], transTable: string,
 
 const all = async (db: D1Database, sql: string) => (await db.prepare(sql).all()).results as any[];
 
+// attach the dmodels relation (via the dmodel_door pivot) to each door — the DoorModel
+// sidebar uses door.dmodels[].suffix to build the display name (e.g. "1155-AG").
+async function attachDmodels(db: D1Database, doors: any[]) {
+  for (const d of doors) {
+    const rows = await all(db,
+      `SELECT dm.id, dm.dmodel_name, dm.suffix, dd.door_id, dd.dmodel_id
+       FROM dmodels dm JOIN dmodel_door dd ON dd.dmodel_id = dm.id WHERE dd.door_id = ${d.id}`);
+    d.dmodels = rows.map((r) => ({
+      id: r.id, dmodel_name: r.dmodel_name, suffix: r.suffix,
+      pivot: { door_id: r.door_id, dmodel_id: r.dmodel_id },
+    }));
+  }
+}
+
 // equipment_other category id -> canonical FE code (mirrors the migration)
 const CAT_CODE: Record<number, string> = {
   1: "handrail", 2: "doorknobInside", 3: "rosette", 4: "parapetProtection",
@@ -39,6 +53,7 @@ export function registerCatalog(app: Hono<Env>) {
   app.get("/api/doors", async (c) => {
     const doors = await all(c.env.DB, "SELECT * FROM doors ORDER BY sort_order IS NULL, sort_order ASC");
     for (const d of doors) d.color = await c.env.DB.prepare("SELECT * FROM colors WHERE id=?").bind(d.color_id).first();
+    await attachDmodels(c.env.DB, doors);
     return c.json({ success: true, doors });
   });
 
