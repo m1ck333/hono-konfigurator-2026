@@ -9,5 +9,6 @@
   "r2_buckets": [
     { "binding": "ASSETS", "bucket_name": "konfigurator-assets" }
   ],
-  "vars": { "JWT_SECRET": "dev-secret-change-me" }
+  "vars": { "JWT_SECRET": "dev-secret-change-me" },
+  "observability": { "enabled": true }
 }

@@ -2,13 +2,26 @@
 
 End-to-end steps to take the configurator off the DigitalOcean droplet and onto Cloudflare,
 with the **frontend unchanged**. Everything below is built and verified locally; this is the
-prod execution. Needs a **Cloudflare account** (Workers Paid — the render is ~40ms CPU).
+prod execution.
+
+## Account is already set up (from the jamogu.rs migration)
+- **Workers Paid + R2 are already active on this CF account — per-account, so nothing to
+  subscribe/pay again.** (Render is ~40ms CPU; bundle is well under limits regardless.)
+- A **Workers/D1/R2 API token** exists at `~/.jamogu-cf-token`. It CAN: deploy, create/manage
+  D1 + R2, attach the Worker as a custom domain, read analytics. It CANNOT: edit raw DNS, purge
+  cache, toggle DNSSEC (do those in the dashboard). Use it via `CLOUDFLARE_API_TOKEN=$(cat ~/.jamogu-cf-token)`.
+- Hono runs **natively** on Workers — the Next.js/Prisma/OpenNext gotchas (Prisma adapter,
+  per-request D1 client, webpack chunks) do NOT apply here. Reference: `~/Projects/CLOUDFLARE_MIGRATION_GUIDE.md`.
+- Our D1 dates are TEXT in one consistent format and we use raw D1 SQL (no Prisma), so the
+  "inconsistent column data" date gotcha does not apply.
+- No GitHub-Actions/cron writes to the DB — all writes go through the Worker (admin CRUD). So the
+  "D1 unreachable from CI" trap does not apply either.
 
 ## 0. Prereqs
 ```bash
 cd hono-konfigurator-be
 npm install
-npx wrangler login
+export CLOUDFLARE_API_TOKEN=$(cat ~/.jamogu-cf-token)   # or: npx wrangler login
 ```
 
 ## 1. Create D1 + R2
@@ -52,11 +65,16 @@ npx wrangler secret put RESEND_API_KEY
 npx wrangler deploy
 ```
 
-## 5. Domain + FE cutover
-- Add a **custom domain / route** to the Worker in the dashboard (e.g. `konfigurator-api.online`,
-  or a new subdomain).
-- Point the FE: set `REACT_APP_API_URL` to the Worker URL (App Platform env var) and redeploy the
-  FE — **no code changes** (the API contract is identical).
+## 5. FE cutover (NO DNS zone move needed)
+Unlike jamogu (where the app *served* the domain), our FE just reads an API base URL — so we can
+skip the entire DNS-cutover dance:
+- The Worker gets a free `https://konfigurator-be.<your-subdomain>.workers.dev` URL on deploy.
+- Point the FE at it: set `REACT_APP_API_URL` to that Worker URL (DigitalOcean App Platform env
+  var) and redeploy the FE — **no FE code changes**, the API contract is identical.
+- The Laravel droplet + `konfigurator-api.online` stay untouched → instant rollback.
+- **Optional, later:** attach a custom domain (e.g. `konfigurator-api.online`) to the Worker. That
+  needs the zone on Cloudflare (move nameservers — see the DNS-cutover section of the CF guide) and
+  is a separate, non-urgent step. Not required for the cutover.
 
 ## 6. Verify (prod)
 - `GET /api/default-items`, `GET /api/doors` return the catalog.
