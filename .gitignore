@@ -9,3 +9,7 @@ out.png
 be.png
 ref.png
 validate-side-by-side.png
+
+# migration data dump (sensitive: user hashes) — kept local
+migrate/data/
+migrate/out/
