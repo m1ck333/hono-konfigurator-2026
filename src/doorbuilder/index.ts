@@ -94,10 +94,12 @@ export async function applyFrame(assembly: PhotonImage, config: DoorConfig, asse
   // the frame itself) — else it lets whatever is under it (e.g. transom glass) show through.
   const top = await frameElement("frame/side-LT.png", W, FRAME_WIDTH, frameColor, assets);
   insertAnchor(assembly, top, "top", 0, 0);
-  const cornerL = await assets.get("frame/corner-L.png");
-  if (cornerL) insertAnchor(assembly, load(cornerL), "top-left", 0, 0);
-  const cornerR = await assets.get("frame/corner-R.png");
-  if (cornerR) insertAnchor(assembly, load(cornerR), "top-right", 0, 0);
+  // corners are a solid frame-colored FRAME_WIDTH² block with the corner-*.png highlight
+  // overlaid (corner-*.png is just a translucent light diagonal, not a colored corner).
+  const cornerL = await frameElement("frame/corner-L.png", FRAME_WIDTH, FRAME_WIDTH, frameColor, assets);
+  insertAnchor(assembly, cornerL, "top-left", 0, 0);
+  const cornerR = await frameElement("frame/corner-R.png", FRAME_WIDTH, FRAME_WIDTH, frameColor, assets);
+  insertAnchor(assembly, cornerR, "top-right", 0, 0);
 }
 
 export async function buildDoorImage(config: DoorConfig, assets: AssetLoader): Promise<Uint8Array> {
