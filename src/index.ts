@@ -10,6 +10,7 @@ import {
 } from "./auth";
 import { sendInquiryEmail } from "./email";
 import { buildDoorImage, type DoorConfig, type AssetLoader } from "./doorbuilder";
+import { registerCatalog } from "./catalog";
 
 type Bindings = {
   DB: D1Database;
@@ -40,15 +41,8 @@ interface Config { modelId: number; equipment?: number[] }
 // ============================================================ health
 app.get("/", (c) => c.json({ ok: true, service: "konfigurator-be" }));
 
-// ============================================================ catalog
-app.get("/api/catalog", async (c) => {
-  const [models, categories, equipment] = await Promise.all([
-    c.env.DB.prepare("SELECT * FROM models WHERE is_shown=1 ORDER BY sort_order").all(),
-    c.env.DB.prepare("SELECT * FROM categories ORDER BY sort_order").all(),
-    c.env.DB.prepare("SELECT * FROM equipment WHERE is_shown=1 ORDER BY sort_order").all(),
-  ]);
-  return c.json({ models: models.results, categories: categories.results, equipment: equipment.results });
-});
+// ============================================================ catalog (default-items + apiResource reads)
+registerCatalog(app as never);
 
 // ============================================================ asset serving (R2, replaces /storage symlink)
 app.get("/storage/*", async (c) => {
