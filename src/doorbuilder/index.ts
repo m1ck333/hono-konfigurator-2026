@@ -48,7 +48,7 @@ export async function buildLeaf(
   const width = Math.trunc((isHalfPanel ? config.halfPanelWidth : config.width) / RATIO);
   const H = Math.trunc(config.height / RATIO);
   const panelColor = (config["panel-color"] as string) ?? "#3f4145";
-  const doorDir = `images/doors/${model}`;
+  const doorDir = `doors/${model}`;
 
   const base = await coloredCanvas(panelColor, width, H, assets);
 
@@ -79,15 +79,15 @@ export async function applyFrame(assembly: PhotonImage, config: DoorConfig, asse
   const W = assembly.get_width();
   const H = assembly.get_height();
 
-  const left = await frameElement("images/frame/side-L.png", FRAME_WIDTH, H, frameColor, assets);
+  const left = await frameElement("frame/side-L.png", FRAME_WIDTH, H, frameColor, assets);
   insertAnchor(assembly, left, "left", 0, 0);
-  const right = await frameElement("images/frame/side-R.png", FRAME_WIDTH, H, frameColor, assets);
+  const right = await frameElement("frame/side-R.png", FRAME_WIDTH, H, frameColor, assets);
   insertAnchor(assembly, right, "right", 0, 0);
-  const topTex = await assets.get("images/frame/side-LT.png");
+  const topTex = await assets.get("frame/side-LT.png");
   if (topTex) insertAnchor(assembly, resize(load(topTex), W, FRAME_WIDTH, SamplingFilter.Triangle), "top", 0, 0);
-  const cornerL = await assets.get("images/frame/corner-L.png");
+  const cornerL = await assets.get("frame/corner-L.png");
   if (cornerL) insertAnchor(assembly, load(cornerL), "top-left", 0, 0);
-  const cornerR = await assets.get("images/frame/corner-R.png");
+  const cornerR = await assets.get("frame/corner-R.png");
   if (cornerR) insertAnchor(assembly, load(cornerR), "top-right", 0, 0);
 }
 

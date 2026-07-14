@@ -58,7 +58,7 @@ async function createDoubleDoor(mainDoor: PhotonImage, config: DoorConfig, asset
   const doorHeight = mainDoor.get_height();
 
   const secondary = await buildLeaf(config, assets, true);
-  const pillar = await frameElement("images/frame/pillar-V.png", FRAME_WIDTH, doorHeight, frameColor, assets);
+  const pillar = await frameElement("frame/pillar-V.png", FRAME_WIDTH, doorHeight, frameColor, assets);
   const totalWidth = rightWidth + secondaryWidth + FRAME_WIDTH;
   const canvas = await coloredCanvas(panelColor, totalWidth, doorHeight, assets);
 
@@ -83,7 +83,7 @@ async function addSideGlassPanels(image: PhotonImage, config: DoorConfig, assets
   const leftGW = scale(config.leftSideWidth ?? 150 * RATIO);
   const rightGW = scale(config.rightSideWidth ?? 150 * RATIO);
 
-  const sideGlassBytes = (await assets.get("images/glass/sandblast.png")) ?? null;
+  const sideGlassBytes = (await assets.get("glass/sandblast.png")) ?? null;
   if (!sideGlassBytes) return image;
   const sideGlass = () => load(sideGlassBytes);
   const glassHeight = image.get_height() - FRAME_WIDTH;
@@ -120,8 +120,8 @@ async function insertGlassPanelWithPillars(
   positionSide: "left" | "right",
   assets: AssetLoader
 ) {
-  const pillarV = await frameElement("images/frame/pillar-V.png", FRAME_WIDTH, glassHeight + FRAME_WIDTH, frameColor, assets);
-  const pillarH = await frameElement("images/frame/pillar-H.png", Math.max(1, glassWidth - FRAME_WIDTH), FRAME_WIDTH, frameColor, assets);
+  const pillarV = await frameElement("frame/pillar-V.png", FRAME_WIDTH, glassHeight + FRAME_WIDTH, frameColor, assets);
+  const pillarH = await frameElement("frame/pillar-H.png", Math.max(1, glassWidth - FRAME_WIDTH), FRAME_WIDTH, frameColor, assets);
 
   for (let i = 0; i < numPanels; i++) {
     const glassX = FRAME_WIDTH + glassWidth * i;
@@ -136,9 +136,9 @@ async function insertGlassPanelWithPillars(
 // ---- transom ----
 async function addTransom(image: PhotonImage, config: DoorConfig, assets: AssetLoader): Promise<PhotonImage> {
   const frameColor = (config["frame-color"] as string) ?? "#8a8f98";
-  // getTransomGlassPath default = images/glass/default.png (absent → bail, matching Laravel)
-  const glassBytes = await assets.get("images/glass/default.png");
-  const pillarBytes = await assets.get("images/frame/pillar-H.png");
+  // getTransomGlassPath default = glass/default.png (absent → bail, matching Laravel)
+  const glassBytes = await assets.get("glass/default.png");
+  const pillarBytes = await assets.get("frame/pillar-H.png");
   if (!glassBytes || !pillarBytes) return image;
 
   let transomGlass = load(glassBytes);
@@ -149,7 +149,7 @@ async function addTransom(image: PhotonImage, config: DoorConfig, assets: AssetL
 
   const transomCanvas = blank(transomWidth, upperGlassHeight);
   wm(transomCanvas, fitCover(transomGlass, transomWidth, upperGlassHeight), 0, 0);
-  const coloredPillar = await frameElement("images/frame/pillar-H.png", transomWidth, pillarWidth, frameColor, assets);
+  const coloredPillar = await frameElement("frame/pillar-H.png", transomWidth, pillarWidth, frameColor, assets);
 
   const newHeight = image.get_height() + upperGlassHeight + pillarWidth;
   const canvas = await coloredCanvas(frameColor, transomWidth, newHeight, assets);
