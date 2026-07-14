@@ -6,7 +6,6 @@ import {
   insertAnchor,
   blank,
   wm,
-  fliph,
   type AssetLoader,
   type PhotonImage,
   type Anchor,
@@ -133,28 +132,27 @@ async function insertGlassPanelWithPillars(
   }
 }
 
-// ---- transom ----
+// ---- transom (upper glass panel) ----
+// The transom uses the same frosted side-glass texture as the side panels.
+// (Laravel keyed this off transom-glass-id → a texture *filename*; that mapping was
+//  lost when storage was re-keyed by id, and every default config resolves to sandblast —
+//  so we render sandblast, matching the side panels and the old app's output.)
 async function addTransom(image: PhotonImage, config: DoorConfig, assets: AssetLoader): Promise<PhotonImage> {
   const frameColor = (config["frame-color"] as string) ?? "#8a8f98";
-  // getTransomGlassPath default = glass/default.png (absent → bail, matching Laravel)
-  const glassBytes = await assets.get("glass/default.png");
-  const pillarBytes = await assets.get("frame/pillar-H.png");
-  if (!glassBytes || !pillarBytes) return image;
+  const glassBytes = await assets.get("glass/sandblast.png");
+  if (!glassBytes) return image;
 
-  let transomGlass = load(glassBytes);
-  if (transomGlass.get_height() > transomGlass.get_width()) fliph(transomGlass); // (rotate 90 approx)
   const upperGlassHeight = scale(config.upperGlassHeight ?? 150 * RATIO);
-  const transomWidth = image.get_width();
+  const width = image.get_width();
   const pillarWidth = FRAME_WIDTH;
 
-  const transomCanvas = blank(transomWidth, upperGlassHeight);
-  wm(transomCanvas, fitCover(transomGlass, transomWidth, upperGlassHeight), 0, 0);
-  const coloredPillar = await frameElement("frame/pillar-H.png", transomWidth, pillarWidth, frameColor, assets);
+  const glass = fitCover(load(glassBytes), width, upperGlassHeight);
+  const pillar = await frameElement("frame/pillar-H.png", width, pillarWidth, frameColor, assets);
 
-  const newHeight = image.get_height() + upperGlassHeight + pillarWidth;
-  const canvas = await coloredCanvas(frameColor, transomWidth, newHeight, assets);
-  wm(canvas, transomCanvas, 0, pillarWidth);
-  wm(canvas, coloredPillar, 0, upperGlassHeight);
+  // stack top→bottom: glass, horizontal frame bar, then the existing door image
+  const canvas = await coloredCanvas(frameColor, width, image.get_height() + upperGlassHeight + pillarWidth, assets);
+  wm(canvas, glass, 0, 0);
+  wm(canvas, pillar, 0, upperGlassHeight);
   wm(canvas, image, 0, upperGlassHeight + pillarWidth);
   return canvas;
 }
