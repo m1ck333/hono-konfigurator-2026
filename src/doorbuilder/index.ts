@@ -11,6 +11,7 @@ import {
   type PhotonImage,
 } from "./photon";
 import { customizeType } from "./types";
+import { addEquipment } from "./equipment";
 
 export { freeArena } from "./photon";
 
@@ -105,8 +106,11 @@ export async function applyFrame(assembly: PhotonImage, config: DoorConfig, asse
 export async function buildDoorImage(config: DoorConfig, assets: AssetLoader): Promise<Uint8Array> {
   await ensurePhoton();
 
-  // Step 1-2: leaf (+ equipment TODO)
+  // Step 1: base leaf
   const leaf = await buildLeaf(config, assets, false);
+
+  // Step 2: equipment overlays (doorknob/handrail/rosette/spy/accessControl/parapet)
+  await addEquipment(leaf, config, assets);
 
   // Step 3: DIN flip
   const din = config["DIN-opening-standard"];

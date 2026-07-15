@@ -109,6 +109,20 @@ async function prepareConfig(db: D1Database, config: DoorConfig): Promise<DoorCo
   const hex = door?.color_hex || "#3f4145";
   if (!config["panel-color"]) config["panel-color"] = hex;
   if (!config["frame-color"]) config["frame-color"] = hex;
+
+  // inject each selected equipment's image/inner_image R2 key so the renderer can composite it
+  const eq = (config.equipment ?? {}) as Record<string, { id?: number | null; image?: string | null; inner_image?: string | null }>;
+  const ids = Object.values(eq).map((e) => e?.id).filter((x): x is number => !!x);
+  if (ids.length) {
+    const rows = (await db.prepare(
+      `SELECT id, image, inner_image FROM equipment_others WHERE id IN (${ids.map(() => "?").join(",")})`
+    ).bind(...ids).all()).results as Array<{ id: number; image: string | null; inner_image: string | null }>;
+    const byId: Record<number, { image: string | null; inner_image: string | null }> = {};
+    for (const r of rows) byId[r.id] = r;
+    for (const e of Object.values(eq)) {
+      if (e?.id && byId[e.id]) { e.image = byId[e.id].image; e.inner_image = byId[e.id].inner_image; }
+    }
+  }
   return config;
 }
 const makeAssets = (env: Bindings): AssetLoader => ({
