@@ -5,8 +5,8 @@
 import { mkdir, writeFile, rm } from "node:fs/promises";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { LARAVEL, CONTRACT_ENDPOINTS, RENDER_CASES } from "./config.mjs";
-import { getJson, postImage, sig, c } from "./lib.mjs";
+import { LARAVEL, CONTRACT_ENDPOINTS, RENDER_CASES, PRICE_USER, PRICE_PASS, PRICE_CASES } from "./config.mjs";
+import { getJson, postImage, post, login, priceNumbers, sig, c } from "./lib.mjs";
 
 const DIR = dirname(fileURLToPath(import.meta.url)) + "/fixtures";
 const SOURCE = process.env.SOURCE_URL || LARAVEL;
@@ -35,6 +35,18 @@ for (const { name, cfg } of RENDER_CASES) {
   ok++;
 }
 console.log(`  render: ${ok}/${RENDER_CASES.length} PNGs captured`);
+
+// --- prices: freeze the breakdown for PRICE_USER (auth-gated; money-critical) ---
+if (PRICE_PASS) {
+  const tok = await login(SOURCE, PRICE_USER, PRICE_PASS);
+  const prices = {};
+  for (const [name, cfg] of PRICE_CASES) {
+    const r = await post(`${SOURCE}/api/calculate-price`, cfg, tok);
+    if (r.status === 200) prices[name] = priceNumbers((await r.json()).data);
+  }
+  await writeFile(`${DIR}/prices.json`, JSON.stringify(prices, null, 2));
+  console.log(`  prices: ${Object.keys(prices).length}/${PRICE_CASES.length} captured (as ${PRICE_USER})`);
+} else console.log(c.dim("  prices: skipped (set PRICE_USER/PRICE_PASS to freeze)"));
 
 await writeFile(`${DIR}/meta.json`, JSON.stringify({ source: SOURCE, capturedAt: new Date().toISOString(), cases: RENDER_CASES.length }, null, 2));
 console.log(`\n${c.pass("✓")} fixtures written to tests/fixtures/`);

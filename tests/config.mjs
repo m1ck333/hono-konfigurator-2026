@@ -13,6 +13,9 @@ export const PERF_BUDGET_MS = 1500;
 // without it, the auth-positive checks are skipped (the 401/403 negative checks still run).
 export const TEST_USER = process.env.TEST_USER || "testuser";
 export const TEST_PASS = process.env.TEST_PASS || "";
+// price-parity uses a real user (its markups drive the numbers). Password from env, never committed.
+export const PRICE_USER = process.env.PRICE_USER || "";
+export const PRICE_PASS = process.env.PRICE_PASS || "";
 
 const NULL_EQUIP = Object.fromEntries(
   ["handrail","doorknobInside","rosette","parapetProtection","accessControl","spy",
@@ -87,3 +90,19 @@ export const RENDER_CASES = [
   { name: "combo_interior", cfg: combo("single-leaf-door-both-side-panels-transom",
       { interiorDoorShown: true, "DIN-opening-standard": "left-inside", "inner-glass-id": 6 }, { doorknobInside: { id: 92 }, hinges: { id: 136 } }) },
 ];
+
+// Price-parity matrix (auth-gated). Needs system-id/panel-color-id/vat/discount/markupLabel;
+// the price breakdown is frozen from Laravel for PRICE_USER and re-checked against the Worker.
+const priceCfg = (over = {}) => ({ ...baseConfig(), "system-id": 159, "panel-color-id": 44, vat: 20, discount: 0, markupLabel: "3", ...over });
+export const PRICE_CASES = [
+  ["plain", priceCfg()],
+  ["side_panels", priceCfg({ type: "single-leaf-door-both-side-panels" })],
+  ["transom", priceCfg({ type: "single-leaf-door-transom" })],
+  ["both_transom", priceCfg({ type: "single-leaf-door-both-side-panels-transom" })],
+  ["double", priceCfg({ type: "double-leaf-door-both-side-panels" })],
+  ["discount_vat", priceCfg({ discount: 15, vat: 10 })],
+  ["markup_label_1", priceCfg({ markupLabel: "1" })],
+  ["big_door", priceCfg({ width: 1200, height: 2400 })],
+  ["with_hinges", priceCfg({ height: 2500, equipment: { ...baseConfig().equipment, hinges: { id: 136 } } })],
+];
+

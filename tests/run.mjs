@@ -4,8 +4,8 @@
 import { readFile, readdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { WORKER, CONTRACT_ENDPOINTS, RENDER_CASES, RMSE_THRESHOLD, PERF_BUDGET_MS, TEST_USER, TEST_PASS } from "./config.mjs";
-import { getJson, post, postImage, sig, imageRmse, c } from "./lib.mjs";
+import { WORKER, CONTRACT_ENDPOINTS, RENDER_CASES, RMSE_THRESHOLD, PERF_BUDGET_MS, TEST_USER, TEST_PASS, PRICE_USER, PRICE_PASS, PRICE_CASES } from "./config.mjs";
+import { getJson, post, postImage, login, priceNumbers, sig, imageRmse, c } from "./lib.mjs";
 
 const DIR = dirname(fileURLToPath(import.meta.url)) + "/fixtures";
 const results = { pass: 0, fail: 0, warn: 0 };
@@ -61,15 +61,19 @@ const logout = await post(`${WORKER}/api/logout`, {});
 logout.status === 401 ? ok("logout no-token → 401") : bad(`logout no-token → ${logout.status}`);
 
 if (TEST_PASS) {
-  const login = await post(`${WORKER}/api/login`, { username: TEST_USER, password: TEST_PASS });
-  if (login.status !== 200) bad(`login → ${login.status}`);
+  const res = await post(`${WORKER}/api/login`, { username: TEST_USER, password: TEST_PASS });
+  if (res.status !== 200) bad(`login → ${res.status}`);
   else {
-    const { token, user } = await login.json();
-    ok(`login (${user.role})`);
+    const body = await res.json();
+    body.access_token ? ok("login returns access_token") : bad("login MISSING access_token (FE reads data.access_token → silent login failure)");
+    body.user && "company_name" in body.user ? ok("login returns full user") : bad("login user truncated (FE stores data.user as userData)");
+    Array.isArray(body.user?.markups) ? ok("login user has markups") : bad("login user missing markups");
+    const token = body.access_token;
     const price = await post(`${WORKER}/api/calculate-price`, RENDER_CASES[0].cfg, token);
     price.status === 200 ? ok("calculate-price with token → 200") : bad(`calculate-price with token → ${price.status}`);
-    const adminOnly = await post(`${WORKER}/api/user/999`, {}, token); // testuser is not admin
-    // (PUT is admin-only; POST here just checks the route isn't a silent 200)
+    const meRes = await post(`${WORKER}/api/me`, {}, token);
+    const meBody = await meRes.json().catch(() => ({}));
+    meRes.status === 200 && "company_name" in meBody ? ok("POST /api/me returns full user") : bad(`POST /api/me → ${meRes.status} (FE calls POST, expects full user)`);
   }
 } else warn("auth-positive checks skipped (set TEST_PASS=… to enable)");
 
@@ -78,6 +82,26 @@ const heavy = RENDER_CASES.find((x) => x.name.includes("double") && x.name.inclu
 const burst = await Promise.all(Array.from({ length: 16 }, () => post(`${WORKER}/api/door/image`, heavy).then((r) => r.status)));
 const bad5xx = burst.filter((s) => s >= 500).length;
 bad5xx === 0 ? ok(`16 concurrent renders → all ${burst[0]}`) : bad(`16 concurrent renders → ${bad5xx} failed (5xx)`);
+
+// ---------- PRICE PARITY: Worker prices must match the frozen Laravel breakdown ----------
+console.log(c.dim("\n▎ Price parity (breakdown vs frozen Laravel prices)"));
+let frozenPrices = null;
+try { frozenPrices = JSON.parse(await readFile(`${DIR}/prices.json`, "utf8")); } catch { /* none */ }
+if (!frozenPrices) warn("no price fixtures — capture with PRICE_PASS to freeze");
+else if (!PRICE_PASS) warn("price check skipped (set PRICE_USER/PRICE_PASS)");
+else {
+  const tok = await login(WORKER, PRICE_USER, PRICE_PASS);
+  for (const [name, cfg] of PRICE_CASES) {
+    const exp = frozenPrices[name];
+    if (!exp) continue;
+    const r = await post(`${WORKER}/api/calculate-price`, cfg, tok);
+    if (r.status !== 200) { bad(`price ${name} → ${r.status}`); continue; }
+    const got = priceNumbers((await r.json()).data);
+    const diffs = Object.keys(exp).filter((k) => Math.abs((got[k] ?? 0) - exp[k]) > 0.02);
+    diffs.length ? bad(`price ${name}: ${diffs.slice(0, 2).map((k) => `${k} want ${exp[k]} got ${got[k] ?? "∅"}`).join("; ")}`)
+                 : ok(`price ${name} (total ${exp["totalPrice.priceWithVat"]})`);
+  }
+}
 
 // ---------- summary ----------
 console.log(`\n${results.fail ? c.fail("FAIL") : c.pass("PASS")}  ${results.pass} passed, ${results.fail} failed, ${results.warn} warnings`);

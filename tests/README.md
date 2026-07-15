@@ -7,7 +7,11 @@ one command, no framework.
 npm test                       # run all suites against the deployed Worker
 WORKER_URL=http://… npm test   # …against a different target (e.g. a local `wrangler dev`)
 TEST_PASS=… npm test           # also run the auth-positive checks (login + priced calc)
+PRICE_USER=Admin PRICE_PASS=… npm test   # also run price parity (a real user; markups drive prices)
 ```
+
+Passwords come from env, never committed. Only the resulting price **numbers** are frozen in
+`fixtures/prices.json`.
 
 ## The suites
 
@@ -15,7 +19,8 @@ TEST_PASS=… npm test           # also run the auth-positive checks (login + pr
 |---|---|---|
 | **Contract** | empty sidebars, missing endpoints/fields, wrong shapes, N+1 slowness | GET each endpoint → its JSON **structure** (key-paths, not values) must match the frozen Laravel signature, within a per-request time budget |
 | **Render parity** | missing transom, wrong frame color, misplaced corner/pillar, unrendered equipment, wrong glass | POST a matrix of configs → PNG → pixel **RMSE** vs the frozen Laravel PNG must stay under `RMSE_THRESHOLD` (3%) |
-| **Smoke** | 500s, price leaking to logged-out users, broken login, memory-limit 503s | status codes, auth gates (401/403), 16-way concurrent render burst |
+| **Smoke** | 500s, price leaking to logged-out users, **broken login contract** (access_token / full user / POST /api/me), memory-limit 503s | status codes, auth gates, auth-response shape, 16-way concurrent render burst |
+| **Price parity** | wrong price formulas (money bugs) | log in as `PRICE_USER`, POST `/api/calculate-price` for a matrix → breakdown must match the frozen Laravel numbers to the cent |
 
 Every bug found during the migration maps to one of these rows.
 

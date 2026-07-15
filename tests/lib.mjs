@@ -43,6 +43,23 @@ export async function imageRmse(a, b) {
   return { rmse: Math.sqrt(sum / n) / 255 };
 }
 
+// log in, returning the bearer token (Laravel: access_token; Worker: access_token too now)
+export async function login(base, username, password) {
+  const r = await post(base + "/api/login", { username, password });
+  if (r.status !== 200) return null;
+  const b = await r.json();
+  return b.access_token || b.token || null;
+}
+
+// flatten a price `data` object to { path: number }, parsing numeric strings ("50.00" → 50)
+export function priceNumbers(d, p = "", out = {}) {
+  for (const [k, v] of Object.entries(d || {})) {
+    if (v && typeof v === "object") priceNumbers(v, `${p}${k}.`, out);
+    else { const n = typeof v === "number" ? v : parseFloat(v); if (!Number.isNaN(n)) out[`${p}${k}`] = Math.round(n * 100) / 100; }
+  }
+  return out;
+}
+
 // tiny colored console
 export const c = {
   pass: (s) => `\x1b[32m${s}\x1b[0m`, fail: (s) => `\x1b[31m${s}\x1b[0m`,

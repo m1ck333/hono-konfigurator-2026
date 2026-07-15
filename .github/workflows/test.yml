@@ -20,4 +20,6 @@ jobs:
         env:
           WORKER_URL: ${{ secrets.WORKER_URL }}
           TEST_PASS: ${{ secrets.TEST_PASS }}
+          PRICE_USER: ${{ secrets.PRICE_USER }}
+          PRICE_PASS: ${{ secrets.PRICE_PASS }}
         run: npm test
