@@ -9,5 +9,15 @@
   "r2_buckets": [
     { "binding": "ASSETS", "bucket_name": "konfigurator-assets" }
   ],
+  // CF-native inquiry email (Email Routing). Sends the config summary + door images.
+  // Sender domain (INQUIRY_FROM) must be a CF zone with Email Routing enabled; each address in
+  // allowed_destination_addresses must be a VERIFIED Email Routing destination.
+  "send_email": [
+    { "name": "INQUIRY_MAILER", "allowed_destination_addresses": ["info@algreen.rs", "m1ck33kc1m@gmail.com"] }
+  ],
+  "vars": {
+    "INQUIRY_FROM": "konfigurator@vrebajpopust.rs",
+    "INQUIRY_TO": "m1ck33kc1m@gmail.com"
+  },
   "observability": { "enabled": true }
 }

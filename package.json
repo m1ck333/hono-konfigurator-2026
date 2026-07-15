@@ -12,7 +12,8 @@
   "dependencies": {
     "@silvia-odwyer/photon": "^0.3.3",
     "bcryptjs": "^3.0.3",
-    "hono": "^4.12.30"
+    "hono": "^4.12.30",
+    "mimetext": "^3.0.28"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260713.1",

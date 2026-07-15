@@ -20,7 +20,7 @@ type Bindings = {
   ASSETS: R2Bucket;
   JWT_SECRET: string;
   ALLOWED_ORIGIN?: string;
-  RESEND_API_KEY?: string;
+  INQUIRY_MAILER?: { send(message: unknown): Promise<void> }; // CF send_email binding
   INQUIRY_FROM?: string;
   INQUIRY_TO?: string;
 };
