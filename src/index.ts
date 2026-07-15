@@ -20,7 +20,10 @@ type Bindings = {
   ASSETS: R2Bucket;
   JWT_SECRET: string;
   ALLOWED_ORIGIN?: string;
-  INQUIRY_MAILER?: { send(message: unknown): Promise<void> }; // CF send_email binding
+  SMTP_HOST?: string; // Loopia SMTP (mailcluster.loopia.se)
+  SMTP_PORT?: string;
+  SMTP_USER?: string;
+  SMTP_PASS?: string; // secret
   INQUIRY_FROM?: string;
   INQUIRY_TO?: string;
 };

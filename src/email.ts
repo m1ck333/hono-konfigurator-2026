@@ -1,19 +1,16 @@
-// Inquiry notification email — CF-native (Email Routing `send_email` binding, no third party).
-// Builds an HTML summary of the whole configuration the customer created + attaches the two
-// rendered door images. Best-effort: the inquiry is always stored in D1 regardless of email.
-//
-// cloudflare:email is a workerd built-in (available with nodejs_compat). mimetext builds the MIME.
-// @ts-ignore -- workerd built-in module, no types on the Node side
-import { EmailMessage } from "cloudflare:email";
-import { createMimeMessage } from "mimetext";
+// Inquiry notification email — sent through the existing Algreen mailbox via Loopia SMTP
+// (worker-mailer over the Worker's TCP socket). No third-party mail service. Builds an HTML
+// summary of the whole configuration the customer created + attaches the two rendered door images.
+// Best-effort: the inquiry is always stored in D1 regardless of whether email succeeds.
+import { WorkerMailer } from "worker-mailer";
 
-interface Mailer {
-  send(message: unknown): Promise<void>;
-}
 export interface EmailEnv {
-  INQUIRY_MAILER?: Mailer; // send_email binding
-  INQUIRY_FROM?: string; // e.g. konfigurator@vrebajpopust.rs
-  INQUIRY_TO?: string; // e.g. info@algreen.rs
+  SMTP_HOST?: string; // mailcluster.loopia.se
+  SMTP_PORT?: string; // "465" (implicit TLS) or "587" (STARTTLS)
+  SMTP_USER?: string; // upit@algreen.rs
+  SMTP_PASS?: string; // secret
+  INQUIRY_FROM?: string; // upit@algreen.rs
+  INQUIRY_TO?: string; // info@algreen.rs (or the test address)
 }
 
 export interface Inquiry {
@@ -91,23 +88,35 @@ function buildHtml(inq: Inquiry): string {
 }
 
 export async function sendInquiryEmail(env: EmailEnv, inquiry: Inquiry): Promise<void> {
-  if (!env.INQUIRY_MAILER || !env.INQUIRY_FROM || !env.INQUIRY_TO) return;
+  if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS || !env.INQUIRY_FROM || !env.INQUIRY_TO) return;
   try {
-    const msg = createMimeMessage();
-    msg.setSender({ name: "Algreen Konfigurator", addr: env.INQUIRY_FROM });
-    msg.setRecipient(env.INQUIRY_TO);
-    msg.setSubject(
-      `Nova ponuda / upit${inquiry.fullName || inquiry.name ? ` — ${inquiry.fullName || inquiry.name}` : ""}`
+    const port = Number(env.SMTP_PORT) || 465;
+    const attachments: { filename: string; content: string; mimeType: string }[] = [];
+    if (inquiry.outerDoorImage)
+      attachments.push({ filename: "spoljni-izgled.png", content: inquiry.outerDoorImage, mimeType: "image/png" });
+    if (inquiry.innerDoorImage)
+      attachments.push({ filename: "unutrasnji-izgled.png", content: inquiry.innerDoorImage, mimeType: "image/png" });
+
+    const who = inquiry.fullName || inquiry.name;
+    await WorkerMailer.send(
+      {
+        host: env.SMTP_HOST,
+        port,
+        secure: port === 465, // implicit TLS on 465
+        startTls: port === 587, // STARTTLS on 587
+        credentials: { username: env.SMTP_USER, password: env.SMTP_PASS },
+        authType: ["login", "plain"],
+      },
+      {
+        from: { name: "Algreen Konfigurator", email: env.INQUIRY_FROM },
+        to: env.INQUIRY_TO,
+        reply: inquiry.email || undefined,
+        subject: `Nova ponuda / upit${who ? ` — ${who}` : ""}`,
+        html: buildHtml(inquiry),
+        text: `Nova ponuda / upit${who ? ` — ${who}` : ""}. Detalji konfiguracije su u HTML verziji poruke; slike vrata su u prilogu.`,
+        attachments,
+      }
     );
-    msg.addMessage({ contentType: "text/html", data: buildHtml(inquiry) });
-    for (const [filename, b64] of [
-      ["spoljni-izgled.png", inquiry.outerDoorImage],
-      ["unutrasnji-izgled.png", inquiry.innerDoorImage],
-    ] as const) {
-      if (b64) msg.addAttachment({ filename, contentType: "image/png", data: b64 });
-    }
-    const message = new EmailMessage(env.INQUIRY_FROM, env.INQUIRY_TO, msg.asRaw());
-    await env.INQUIRY_MAILER.send(message);
   } catch (e) {
     console.error("inquiry email error", e);
   }

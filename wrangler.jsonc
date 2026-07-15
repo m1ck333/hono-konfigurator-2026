@@ -9,14 +9,14 @@
   "r2_buckets": [
     { "binding": "ASSETS", "bucket_name": "konfigurator-assets" }
   ],
-  // CF-native inquiry email (Email Routing). Sends the config summary + door images.
-  // Sender domain (INQUIRY_FROM) must be a CF zone with Email Routing enabled; each address in
-  // allowed_destination_addresses must be a VERIFIED Email Routing destination.
-  "send_email": [
-    { "name": "INQUIRY_MAILER", "allowed_destination_addresses": ["info@algreen.rs", "m1ck33kc1m@gmail.com"] }
-  ],
+  // Inquiry email via the existing Algreen mailbox (Loopia SMTP, worker-mailer over TCP socket).
+  // SMTP_PASS is a secret (wrangler secret put SMTP_PASS). INQUIRY_TO is the test address for now;
+  // switch to info@algreen.rs once verified.
   "vars": {
-    "INQUIRY_FROM": "konfigurator@vrebajpopust.rs",
+    "SMTP_HOST": "mailcluster.loopia.se",
+    "SMTP_PORT": "465",
+    "SMTP_USER": "upit@algreen.rs",
+    "INQUIRY_FROM": "upit@algreen.rs",
     "INQUIRY_TO": "m1ck33kc1m@gmail.com"
   },
   "observability": { "enabled": true }
