@@ -47,8 +47,9 @@ function assetCandidates(rawPath: string): string[] {
   let p = decodeURIComponent(rawPath).replace(/^\/+/, "");
   p = p.replace(/^storage\//, "").replace(/^api\//, "");
   const cands = [p];
-  // EquipmentGroup fallback requests `thumbnails/equipment/...`; our keys are `equipment/...`
-  if (p.startsWith("thumbnails/equipment/")) cands.push(p.replace(/^thumbnails\//, ""));
+  // The FE requests `thumbnails/<category>/...` (sideglass, equipment, glass, …) but our R2 keys
+  // are `<category>/...` — strip the `thumbnails/` prefix as a fallback.
+  if (p.startsWith("thumbnails/")) cands.push(p.replace(/^thumbnails\//, ""));
   return cands;
 }
 async function serveAsset(c: Context<{ Bindings: Bindings; Variables: Variables }>, rawPath: string): Promise<Response | null> {
