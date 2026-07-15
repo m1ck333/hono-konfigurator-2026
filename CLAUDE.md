@@ -96,6 +96,14 @@ adminMarkup = admin's `default=1` markup (non-admins only); userMarkup = user's 
 - `npm run dev` — `wrangler dev` (local workerd + local D1/R2)
 - `npm run db:local` — apply migrations + seed to local D1
 - `npm run deploy` — `wrangler deploy`
+- `npm test` — validate the Worker vs frozen Laravel fixtures (contract + render RMSE + smoke). See `tests/README.md`.
+- `npm run test:capture` — re-freeze `tests/fixtures/` from live Laravel (only while the droplet exists).
+
+## Testing (run after any BE change)
+`tests/` checks the Worker against **Laravel's captured output** (the oracle): contract (endpoint
+JSON *structure* must match), render parity (config matrix → PNG → pixel RMSE < 3%), and smoke
+(status/auth/concurrent-burst). Fixtures in `tests/fixtures/` are committed — they're the only
+ground truth once the droplet is gone. Every migration bug we hit maps to one of these suites.
 
 ## Golden rules
 1. Full Laravel parity — same API contract, same rendered pixels; the FE stays unchanged.

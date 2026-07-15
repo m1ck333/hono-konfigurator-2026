@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "db:local": "wrangler d1 execute konfigurator --local --file=./migrations/0001_init.sql && wrangler d1 execute konfigurator --local --file=./migrations/0002_seed.sql"
+    "db:local": "wrangler d1 execute konfigurator --local --file=./migrations/0001_init.sql && wrangler d1 execute konfigurator --local --file=./migrations/0002_seed.sql",
+    "test": "node tests/run.mjs",
+    "test:capture": "node tests/capture.mjs"
   },
   "dependencies": {
     "@silvia-odwyer/photon": "^0.3.3",

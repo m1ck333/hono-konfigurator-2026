@@ -115,7 +115,8 @@ export function registerCatalog(app: Hono<Env>) {
       const srName = (e.translations as any[]).find((t) => t.language === "sr")?.name ?? null;
       (grouped[name] ??= { category_name: name, category_id: e.category_id, groupedBySubcategory: {}, equipments: [] });
       grouped[name].equipments.push({ ...e, sr_name: srName });
-      if (e.subcategory) (grouped[name].groupedBySubcategory[e.subcategory] ??= []).push(e);
+      // Laravel attaches the category relation to the groupedBySubcategory items
+      if (e.subcategory) (grouped[name].groupedBySubcategory[e.subcategory] ??= []).push({ ...e, category: { id: e.category_id, name } });
     }
     // subcategory parent items (is_subcategory=1), each with category {id,name} — matches Laravel
     const subcategories = await withTranslations(db, await all(db, "SELECT * FROM equipment_others WHERE is_subcategory=1 ORDER BY sort_order"), "equipment_other_translations", "equipment_id");

@@ -1,0 +1,23 @@
+name: tests
+# Validates the deployed Worker against the frozen Laravel fixtures.
+# Runs on push and on demand. Set repo secrets:
+#   WORKER_URL (optional — defaults to the prod Worker), TEST_PASS (for auth-positive checks).
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Run test suite against the Worker
+        env:
+          WORKER_URL: ${{ secrets.WORKER_URL }}
+          TEST_PASS: ${{ secrets.TEST_PASS }}
+        run: npm test
