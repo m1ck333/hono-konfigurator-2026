@@ -65,6 +65,15 @@ export function registerCatalog(app: Hono<Env>) {
     await attachDmodels(c.env.DB, doors);
     return c.json({ success: true, doors });
   });
+  // single door (bare object) — the Glass sidebar reads has_glass/decorative_glass_name from here
+  app.get("/api/doors/:id", async (c) => {
+    const db = c.env.DB;
+    const door = await db.prepare("SELECT * FROM doors WHERE id=?").bind(c.req.param("id")).first<any>();
+    if (!door) return c.json({ error: "not found" }, 404);
+    await attachColors(db, [door]);
+    await attachDmodels(db, [door]);
+    return c.json(door);
+  });
 
   // ---- colors + categories (Laravel returns BARE arrays here) ----
   app.get("/api/colors", async (c) => {
