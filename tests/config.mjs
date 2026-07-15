@@ -34,6 +34,12 @@ export function baseConfig(over = {}) {
   };
 }
 const eq = (type, id) => { const e = structuredClone(NULL_EQUIP); e[type] = { id }; return { equipment: e }; };
+// combined config: base + overrides + specific equipment (interaction coverage)
+function combo(type, over, equip) {
+  const c = baseConfig({ type, ...over });
+  for (const [k, v] of Object.entries(equip)) c.equipment[k] = v;
+  return c;
+}
 
 // GET endpoints whose JSON *structure* is frozen (data values may change; shape must not).
 export const CONTRACT_ENDPOINTS = [
@@ -73,4 +79,11 @@ export const RENDER_CASES = [
   { name: "sideglass_general1", cfg: baseConfig({ type: "single-leaf-door-both-side-panels", "side-glass-id": 7, "side-glass-name": "sideglass" }) },
   { name: "sideglass_general3", cfg: baseConfig({ type: "single-leaf-door-both-side-panels", "side-glass-id": 9, "side-glass-name": "sideglass" }) },
   { name: "transomglass_chinchilla", cfg: baseConfig({ type: "single-leaf-door-transom", "transom-glass-id": 1 }) },
+  // realistic combined configs (everything at once — interaction coverage)
+  { name: "combo_full_exterior", cfg: combo("single-leaf-door-both-side-panels-transom",
+      { "panel-color": "#ffffff", "inner-glass-id": 1, "side-glass-id": 7, "side-glass-name": "sideglass", "transom-glass-id": 6 }, { handrail: { id: 1 } }) },
+  { name: "combo_double_hinges", cfg: combo("double-leaf-door-both-side-panels",
+      { "DIN-opening-standard": "left-outside" }, { hinges: { id: 136 }, automaticClosingDevice: { id: 151 } }) },
+  { name: "combo_interior", cfg: combo("single-leaf-door-both-side-panels-transom",
+      { interiorDoorShown: true, "DIN-opening-standard": "left-inside", "inner-glass-id": 6 }, { doorknobInside: { id: 92 }, hinges: { id: 136 } }) },
 ];
