@@ -34,6 +34,7 @@ export interface DoorConfig {
   "right-side-glass-number"?: number;
   interiorDoorShown?: boolean;
   has_glass?: number; // filled by the render endpoint from the doors table
+  innerGlassTexture?: string | null; // door-folder texture for the selected inner-glass-id
   [k: string]: unknown;
 }
 
@@ -69,11 +70,13 @@ export async function buildLeaf(
     return true;
   };
 
-  // inner glass (only if the model has glass): default staklo.png, else sandblast.png
+  // inner glass: selected texture (from inner-glass-id) → model's staklo default → sandblast backup
   if (config.has_glass) {
-    if (!(await compose(`${doorDir}/staklo.png`, "center"))) {
-      await compose(`${doorDir}/sandblast.png`, "center");
-    }
+    const tex = config.innerGlassTexture;
+    let done = false;
+    if (tex) done = await compose(`${doorDir}/${tex}.png`, "center");
+    if (!done) done = await compose(`${doorDir}/staklo.png`, "center");
+    if (!done) await compose(`${doorDir}/sandblast.png`, "center");
   }
   await compose(`${doorDir}/udubljenje.png`, "center"); // dent
   await compose(`${doorDir}/okvir.png`, "manual"); // glass frame

@@ -1,0 +1,14 @@
+ALTER TABLE equipment_glasses ADD COLUMN texture TEXT;
+UPDATE equipment_glasses SET texture='chinchilla' WHERE id=1;
+UPDATE equipment_glasses SET texture='delta-matt' WHERE id=2;
+UPDATE equipment_glasses SET texture='master-carre' WHERE id=3;
+UPDATE equipment_glasses SET texture='pave' WHERE id=4;
+UPDATE equipment_glasses SET texture='rice' WHERE id=5;
+UPDATE equipment_glasses SET texture='sandblast' WHERE id=6;
+UPDATE equipment_glasses SET texture='General1' WHERE id=7;
+UPDATE equipment_glasses SET texture='General2' WHERE id=8;
+UPDATE equipment_glasses SET texture='General3' WHERE id=9;
+UPDATE equipment_glasses SET texture='General4' WHERE id=10;
+UPDATE equipment_glasses SET texture='General5' WHERE id=11;
+UPDATE equipment_glasses SET texture='General6' WHERE id=12;
+UPDATE equipment_glasses SET texture='General7' WHERE id=13;

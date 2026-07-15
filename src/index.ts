@@ -110,6 +110,13 @@ async function prepareConfig(db: D1Database, config: DoorConfig): Promise<DoorCo
   if (!config["panel-color"]) config["panel-color"] = hex;
   if (!config["frame-color"]) config["frame-color"] = hex;
 
+  // resolve the selected in-door glass to a door-folder texture (chinchilla/sandblast/…)
+  const innerGlassId = config["inner-glass-id"];
+  if (innerGlassId) {
+    const g = await db.prepare("SELECT texture FROM equipment_glasses WHERE id=?").bind(innerGlassId).first<{ texture: string | null }>();
+    config.innerGlassTexture = g?.texture ?? null;
+  }
+
   // inject each selected equipment's image/inner_image R2 key so the renderer can composite it
   const eq = (config.equipment ?? {}) as Record<string, { id?: number | null; image?: string | null; inner_image?: string | null }>;
   const ids = Object.values(eq).map((e) => e?.id).filter((x): x is number => !!x);
