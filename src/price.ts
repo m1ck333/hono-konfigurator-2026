@@ -64,7 +64,7 @@ export function registerPrice(app: Hono<Env>) {
       else if (f.hasRightGlass) sysBase = ((2 * (height + tH)) + (3 * (width + rW)) + (3 * height) + (2 * width)) / 1000 * sysPrice;
       else sysBase = ((2 * (height + tH)) + (5 * width) + (2 * height)) / 1000 * sysPrice;
     } else if (f.hasLeftGlass && f.hasRightGlass) {
-      sysBase = ((5 * height) + (2 * (width + lW + rW)) + (2 * width)) / 1000 * sysPrice;
+      sysBase = ((6 * height) + (2 * (width + lW + rW)) + (2 * width)) / 1000 * sysPrice; // both sides = 6*height (Laravel)
     } else if (f.hasLeftGlass) {
       sysBase = ((5 * height) + (2 * (width + lW)) + (2 * width)) / 1000 * sysPrice;
     } else if (f.hasRightGlass) {
