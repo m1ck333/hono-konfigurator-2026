@@ -205,6 +205,15 @@ app.get("/api/printed-contents/:id", requireAuth, async (c) => {
 });
 
 // ============================================================ auth
+// the full user row (minus password) + its markups — the shape the FE stores as userData
+async function fullUser(db: D1Database, id: number) {
+  const u = await db.prepare("SELECT * FROM users WHERE id=?").bind(id).first<any>();
+  if (!u) return null;
+  const { password: _pw, ...safe } = u;
+  const markups = (await db.prepare("SELECT * FROM markups WHERE user_id=?").bind(id).all()).results;
+  return { ...safe, markups };
+}
+
 app.post("/api/login", async (c) => {
   const { username, password } = await c.req.json<{ username: string; password: string }>();
   if (!username || !password) return c.json({ error: "username and password required" }, 400);
@@ -213,10 +222,14 @@ app.post("/api/login", async (c) => {
     return c.json({ error: "invalid credentials" }, 401);
   }
   const token = await signToken(c.env.JWT_SECRET, { id: user.id, username: user.username, role: user.role });
-  return c.json({ token, user: { id: user.id, username: user.username, role: user.role } });
+  // Laravel shape: FE reads data.access_token + data.user (full row incl. markups/logo/company)
+  return c.json({ access_token: token, token_type: "bearer", expires_in: 604800, user: await fullUser(c.env.DB, user.id) });
 });
 
-app.get("/api/me", requireAuth, (c) => c.json({ user: c.get("user") }));
+// FE calls POST /api/me (via fetchWithAuth) and stores the response directly as userData.
+const me = async (c: Context<{ Bindings: Bindings; Variables: Variables }>) => c.json(await fullUser(c.env.DB, c.get("user").id));
+app.post("/api/me", requireAuth, me);
+app.get("/api/me", requireAuth, me);
 // JWT is stateless — logout is client-side (drop the token); just acknowledge.
 app.post("/api/logout", requireAuth, (c) => c.json({ success: true, message: "logged out" }));
 
