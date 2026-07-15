@@ -63,6 +63,9 @@ export const RENDER_CASES = [
   { name: "eq_accessControl", cfg: baseConfig({ type: "single-leaf-door", ...eq("accessControl", 117) }) },
   { name: "eq_parapet",       cfg: baseConfig({ type: "single-leaf-door", ...eq("parapetProtection", 113) }) },
   { name: "eq_spy",           cfg: baseConfig({ type: "single-leaf-door", ...eq("spy", 129) }) },
+  // hinges + closing device only show on outside-opening exterior (or inside-opening interior)
+  { name: "eq_hinges",  cfg: baseConfig({ type: "single-leaf-door", "DIN-opening-standard": "left-outside", ...eq("hinges", 136) }) },
+  { name: "eq_closing", cfg: baseConfig({ type: "single-leaf-door", "DIN-opening-standard": "left-outside", ...eq("automaticClosingDevice", 151) }) },
   // in-door glass textures
   ...[["staklo",null],["chinchilla",1],["sandblast",6]].map(([n,id]) => ({
     name: `glass_${n}`, cfg: baseConfig({ type: "single-leaf-door", "inner-glass-id": id }) })),

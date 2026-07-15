@@ -11,7 +11,7 @@ import {
   type PhotonImage,
 } from "./photon";
 import { customizeType } from "./types";
-import { addEquipment } from "./equipment";
+import { addEquipment, addFrameEquipment } from "./equipment";
 
 export { freeArena } from "./photon";
 
@@ -104,6 +104,9 @@ export async function applyFrame(assembly: PhotonImage, config: DoorConfig, asse
   insertAnchor(assembly, cornerL, "top-left", 0, 0);
   const cornerR = await frameElement("frame/corner-R.png", FRAME_WIDTH, FRAME_WIDTH, frameColor, assets);
   insertAnchor(assembly, cornerR, "top-right", 0, 0);
+
+  // hinges + automatic-closing-device sit on the finished frame (DIN-positioned)
+  await addFrameEquipment(assembly, config, assets);
 }
 
 export async function buildDoorImage(config: DoorConfig, assets: AssetLoader): Promise<Uint8Array> {

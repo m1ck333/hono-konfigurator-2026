@@ -67,10 +67,21 @@ export function blank(w: number, h: number) {
 export const wm = (base: PhotonImage, top: PhotonImage, x: number, y: number) =>
   watermark(base, top, BigInt(Math.round(x)), BigInt(Math.round(y)));
 
-// insert with Intervention anchor semantics
+// insert with Intervention anchor semantics. Intervention CLIPS parts of src that fall off the
+// canvas (e.g. a hinge placed at negative x hangs off the left edge); photon's watermark does
+// not, so we crop src to its visible rectangle first.
 export function insertAnchor(base: PhotonImage, src: PhotonImage, anchor: Anchor, offX = 0, offY = 0) {
-  const { x, y } = anchorToTopLeft(anchor, base.get_width(), base.get_height(), src.get_width(), src.get_height(), offX, offY);
-  wm(base, src, x, y);
+  const dw = base.get_width(), dh = base.get_height();
+  const sw = src.get_width(), sh = src.get_height();
+  let { x, y } = anchorToTopLeft(anchor, dw, dh, sw, sh, offX, offY);
+  let cx1 = 0, cy1 = 0, cx2 = sw, cy2 = sh;
+  if (x < 0) { cx1 = -x; x = 0; }
+  if (y < 0) { cy1 = -y; y = 0; }
+  if (x + (cx2 - cx1) > dw) cx2 = cx1 + (dw - x);
+  if (y + (cy2 - cy1) > dh) cy2 = cy1 + (dh - y);
+  if (cx2 <= cx1 || cy2 <= cy1) return; // fully off-canvas
+  const clipped = cx1 === 0 && cy1 === 0 && cx2 === sw && cy2 === sh ? src : crop(src, cx1, cy1, cx2, cy2);
+  wm(base, clipped, x, y);
 }
 
 // ImageHelper::createColoredCanvasOrImage — hex fill OR texture resized to WxH
