@@ -98,34 +98,51 @@ function queuedRender<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 // ============================================================ render (full DoorBuilder parity)
-app.post("/api/door/image", async (c) => {
-  const config = await c.req.json<DoorConfig>();
-  // Laravel reads has_glass + the door's default color from the DB.
-  const door = await c.env.DB
+// Fill has_glass + the door's default color from the DB (Laravel DoorBuilder.php:65-66 —
+// panel/frame fall back to the door's own color_hex, not a hardcoded gray).
+async function prepareConfig(db: D1Database, config: DoorConfig): Promise<DoorConfig> {
+  const door = await db
     .prepare("SELECT d.has_glass, c.color_hex FROM doors d LEFT JOIN colors c ON c.id = d.color_id WHERE d.id = ?")
     .bind(config["model-id"])
     .first<{ has_glass: number; color_hex: string | null }>();
   config.has_glass = door?.has_glass ?? 0;
-  // Match DoorBuilder.php:65-66 — panel/frame fall back to the door's own color_hex
-  // (NOT hardcoded gray) when the client doesn't send an explicit color.
-  const defaultHex = door?.color_hex || "#3f4145";
-  if (!config["panel-color"]) config["panel-color"] = defaultHex;
-  if (!config["frame-color"]) config["frame-color"] = defaultHex;
-  const assets: AssetLoader = {
-    get: async (key) => {
-      const obj = await c.env.ASSETS.get(key);
-      return obj ? new Uint8Array(await obj.arrayBuffer()) : null;
-    },
-  };
-  const png = await queuedRender(async () => {
-    try {
-      // clone the bytes out of WASM memory before freeing the image arena
-      return new Uint8Array(await buildDoorImage(config, assets));
-    } finally {
-      freeArena();
-    }
+  const hex = door?.color_hex || "#3f4145";
+  if (!config["panel-color"]) config["panel-color"] = hex;
+  if (!config["frame-color"]) config["frame-color"] = hex;
+  return config;
+}
+const makeAssets = (env: Bindings): AssetLoader => ({
+  get: async (key) => {
+    const obj = await env.ASSETS.get(key);
+    return obj ? new Uint8Array(await obj.arrayBuffer()) : null;
+  },
+});
+// serialized render → clone bytes out of WASM memory → free the arena
+const renderPng = (config: DoorConfig, assets: AssetLoader) =>
+  queuedRender(async () => {
+    try { return new Uint8Array(await buildDoorImage(config, assets)); }
+    finally { freeArena(); }
   });
+function bytesToBase64(bytes: Uint8Array): string {
+  let bin = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  return btoa(bin);
+}
+
+app.post("/api/door/image", async (c) => {
+  const config = await prepareConfig(c.env.DB, await c.req.json<DoorConfig>());
+  const png = await renderPng(config, makeAssets(c.env));
   return new Response(png, { headers: { "content-type": "image/png", "cache-control": "no-store" } });
+});
+
+// both exterior + interior renders, returned as base64 PNGs ({ innerDoor, outerDoor }).
+app.post("/api/door/both-sides-images", async (c) => {
+  const base = await prepareConfig(c.env.DB, await c.req.json<DoorConfig>());
+  const assets = makeAssets(c.env);
+  const outerDoor = bytesToBase64(await renderPng({ ...base, interiorDoorShown: false }, assets));
+  const innerDoor = bytesToBase64(await renderPng({ ...base, interiorDoorShown: true }, assets));
+  return c.json({ innerDoor, outerDoor });
 });
 
 // ============================================================ price (full parity, auth-gated)
@@ -172,6 +189,8 @@ app.post("/api/login", async (c) => {
 });
 
 app.get("/api/me", requireAuth, (c) => c.json({ user: c.get("user") }));
+// JWT is stateless — logout is client-side (drop the token); just acknowledge.
+app.post("/api/logout", requireAuth, (c) => c.json({ success: true, message: "logged out" }));
 
 // ============================================================ admin (catalog CRUD + users + markups)
 registerAdmin(app as never);

@@ -99,6 +99,21 @@ export function registerAdmin(app: Hono<Env>) {
     await c.env.DB.prepare("UPDATE users SET password=? WHERE id=?").bind(await hashPassword(password), user.id).run();
     return c.json({ success: true });
   });
+  // edit / delete a user by id (FE uses the SINGULAR /api/user/:id)
+  app.put("/api/user/:id", requireAuth, requireAdmin, async (c) => {
+    const cols = await columns(c.env.DB, "users");
+    const body = await c.req.json<Record<string, unknown>>();
+    if (body.password) body.password = await hashPassword(String(body.password));
+    const keys = cols.filter((k) => k in body);
+    if (!keys.length) return c.json({ success: true });
+    await c.env.DB.prepare(`UPDATE users SET ${keys.map((k) => `${q(k)}=?`).join(",")} WHERE id=?`)
+      .bind(...keys.map((k) => body[k] as never), c.req.param("id")).run();
+    return c.json({ success: true });
+  });
+  app.delete("/api/user/:id", requireAuth, requireAdmin, async (c) => {
+    await c.env.DB.prepare("DELETE FROM users WHERE id=?").bind(c.req.param("id")).run();
+    return c.json({ success: true });
+  });
 
   // ---- markups (admin) ----
   app.get("/api/markups", requireAuth, requireAdmin, async (c) =>
@@ -108,6 +123,18 @@ export function registerAdmin(app: Hono<Env>) {
     const r = await c.env.DB.prepare("INSERT INTO markups (user_id, markup_label, markup_value, \"default\") VALUES (?,?,?,?)")
       .bind(b.user_id, b.markup_label ?? "default", b.markup_value ?? 0, b.default ?? 0).run();
     return c.json({ success: true, id: r.meta.last_row_id }, 201);
+  });
+  // set/clear the caller's default markup (must be registered BEFORE /api/markups/:id).
+  // Scoped to the authenticated user's own markups (Laravel: $user->markups()).
+  app.put("/api/markups/update-default", requireAuth, async (c) => {
+    const user = c.get("user");
+    const { id } = await c.req.json<{ id: number | null }>();
+    await c.env.DB.prepare('UPDATE markups SET "default"=0 WHERE user_id=?').bind(user.id).run();
+    if (id) {
+      await c.env.DB.prepare('UPDATE markups SET "default"=1 WHERE id=? AND user_id=?').bind(id, user.id).run();
+      return c.json({ success: true, message: "Default markup updated successfully" });
+    }
+    return c.json({ success: true, message: "Default markup cleared successfully" });
   });
   app.put("/api/markups/:id", requireAuth, requireAdmin, async (c) => {
     const b = await c.req.json<any>();

@@ -116,6 +116,22 @@ export function registerCatalog(app: Hono<Env>) {
   app.get("/api/equipment-other-categories", async (c) =>
     c.json({ success: true, categories: await all(c.env.DB, "SELECT * FROM equipment_other_categories") }));
 
+  // ---- equipment-translations: all equipment names, grouped for the FE's getTranslation() ----
+  app.get("/api/equipment-translations", async (c) => {
+    const db = c.env.DB;
+    const kebab = (s: string) => (s ?? "unknown_category").replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+    const data: Record<string, any[]> = {};
+    const cats = await all(db, "SELECT id, name FROM equipment_other_categories");
+    const catKey: Record<number, string> = {};
+    for (const cat of cats) catKey[cat.id] = kebab(cat.name);
+    const eq = await all(db, "SELECT eo.category_id, t.equipment_id, t.language, t.name FROM equipment_other_translations t JOIN equipment_others eo ON eo.id = t.equipment_id");
+    for (const r of eq) (data[catKey[r.category_id] ?? "unknown_category"] ??= []).push({ equipment_id: r.equipment_id, language: r.language, name: r.name });
+    data.equipment_locks = (await all(db, "SELECT lock_id, language, name FROM equipment_lock_translations")).map((r) => ({ lock_id: r.lock_id, language: r.language, name: r.name }));
+    data.equipment_glasses = (await all(db, "SELECT glass_id, language, name FROM equipment_glass_translations")).map((r) => ({ glass_id: r.glass_id, language: r.language, name: r.name }));
+    data.equipment_systems = (await all(db, "SELECT equipment_id, language, description AS name FROM equipment_system_translations")).map((r) => ({ equipment_id: r.equipment_id, language: r.language, name: r.name }));
+    return c.json({ success: true, data });
+  });
+
   // ---- houses ----
   app.get("/api/houses", async (c) => c.json({ success: true, houses: await all(c.env.DB, "SELECT * FROM houses") }));
   app.get("/api/house-colors", async (c) => c.json({ success: true, colors: await all(c.env.DB, "SELECT * FROM house_colors ORDER BY id") }));
