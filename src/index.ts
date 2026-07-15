@@ -110,12 +110,19 @@ async function prepareConfig(db: D1Database, config: DoorConfig): Promise<DoorCo
   if (!config["panel-color"]) config["panel-color"] = hex;
   if (!config["frame-color"]) config["frame-color"] = hex;
 
-  // resolve the selected in-door glass to a door-folder texture (chinchilla/sandblast/…)
-  const innerGlassId = config["inner-glass-id"];
-  if (innerGlassId) {
-    const g = await db.prepare("SELECT texture FROM equipment_glasses WHERE id=?").bind(innerGlassId).first<{ texture: string | null }>();
-    config.innerGlassTexture = g?.texture ?? null;
-  }
+  // resolve glass selections to texture filenames (Laravel resolves these from the glass
+  // thumbnail's basename; we kept it in equipment_glasses.texture). in-door + transom use the
+  // door-folder / glass/ texture; side glass can also be a model-specific sideglass/{model}.jpg.
+  const glassTexture = async (id: unknown) =>
+    id ? (await db.prepare("SELECT texture FROM equipment_glasses WHERE id=?").bind(id).first<{ texture: string | null }>())?.texture ?? null : null;
+  if (config["inner-glass-id"]) config.innerGlassTexture = await glassTexture(config["inner-glass-id"]);
+  if (config["transom-glass-id"]) config.transomGlassTexture = await glassTexture(config["transom-glass-id"]);
+  const sgName = config["side-glass-name"] as string | null;
+  const sgId = config["side-glass-id"];
+  config.sideGlassTexture =
+    sgName === "default" ? (config["model-name"] as string)
+    : sgId ? await glassTexture(sgId)
+    : sgName || null;
 
   // inject each selected equipment's image/inner_image R2 key so the renderer can composite it
   const eq = (config.equipment ?? {}) as Record<string, { id?: number | null; image?: string | null; inner_image?: string | null }>;

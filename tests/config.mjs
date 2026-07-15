@@ -69,4 +69,8 @@ export const RENDER_CASES = [
   // in-door glass textures
   ...[["staklo",null],["chinchilla",1],["sandblast",6]].map(([n,id]) => ({
     name: `glass_${n}`, cfg: baseConfig({ type: "single-leaf-door", "inner-glass-id": id }) })),
+  // side + transom glass selection (were hardcoded to sandblast)
+  { name: "sideglass_general1", cfg: baseConfig({ type: "single-leaf-door-both-side-panels", "side-glass-id": 7, "side-glass-name": "sideglass" }) },
+  { name: "sideglass_general3", cfg: baseConfig({ type: "single-leaf-door-both-side-panels", "side-glass-id": 9, "side-glass-name": "sideglass" }) },
+  { name: "transomglass_chinchilla", cfg: baseConfig({ type: "single-leaf-door-transom", "transom-glass-id": 1 }) },
 ];

@@ -82,7 +82,12 @@ async function addSideGlassPanels(image: PhotonImage, config: DoorConfig, assets
   const leftGW = scale(config.leftSideWidth ?? 150 * RATIO);
   const rightGW = scale(config.rightSideWidth ?? 150 * RATIO);
 
-  const sideGlassBytes = (await assets.get("glass/sandblast.png")) ?? null;
+  // selected side glass: glass/{tex}.png (ornament) or sideglass/{tex}.jpg (model default /
+  // General*), falling back to sandblast — mirrors Laravel getSideGlassFilePath.
+  const tex = config.sideGlassTexture;
+  let sideGlassBytes: Uint8Array | null = null;
+  if (tex) sideGlassBytes = (await assets.get(`glass/${tex}.png`)) ?? (await assets.get(`sideglass/${tex}.jpg`));
+  if (!sideGlassBytes) sideGlassBytes = await assets.get("glass/sandblast.png");
   if (!sideGlassBytes) return image;
   const sideGlass = () => load(sideGlassBytes);
   const glassHeight = image.get_height() - FRAME_WIDTH;
@@ -139,7 +144,9 @@ async function insertGlassPanelWithPillars(
 //  so we render sandblast, matching the side panels and the old app's output.)
 async function addTransom(image: PhotonImage, config: DoorConfig, assets: AssetLoader): Promise<PhotonImage> {
   const frameColor = (config["frame-color"] as string) ?? "#8a8f98";
-  const glassBytes = await assets.get("glass/sandblast.png");
+  // selected transom glass texture (glass/{tex}.png) → sandblast fallback
+  const tex = config.transomGlassTexture;
+  const glassBytes = (tex ? await assets.get(`glass/${tex}.png`) : null) ?? (await assets.get("glass/sandblast.png"));
   if (!glassBytes) return image;
 
   const upperGlassHeight = scale(config.upperGlassHeight ?? 150 * RATIO);

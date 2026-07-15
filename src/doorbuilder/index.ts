@@ -35,6 +35,8 @@ export interface DoorConfig {
   interiorDoorShown?: boolean;
   has_glass?: number; // filled by the render endpoint from the doors table
   innerGlassTexture?: string | null; // door-folder texture for the selected inner-glass-id
+  sideGlassTexture?: string | null;  // glass/ or sideglass/ texture for the side panels
+  transomGlassTexture?: string | null; // glass/ texture for the transom
   [k: string]: unknown;
 }
 
