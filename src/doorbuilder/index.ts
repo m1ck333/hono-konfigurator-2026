@@ -1,6 +1,8 @@
 import {
   ensurePhoton,
   coloredCanvas,
+  applyMetallic,
+  isHex,
   load,
   centerClip,
   insertAnchor,
@@ -33,6 +35,7 @@ export interface DoorConfig {
   "left-side-glass-number"?: number;
   "right-side-glass-number"?: number;
   interiorDoorShown?: boolean;
+  metallic?: boolean; // satin-metallic finish on the coloured panel/frame
   has_glass?: number; // filled by the render endpoint from the doors table
   innerGlassTexture?: string | null; // door-folder texture for the selected inner-glass-id
   sideGlassTexture?: string | null;  // glass/ or sideglass/ texture for the side panels
@@ -55,7 +58,9 @@ export async function buildLeaf(
   const panelColor = (config["panel-color"] as string) ?? "#3f4145";
   const doorDir = `doors/${model}`;
 
-  const base = await coloredCanvas(panelColor, width, H, assets);
+  let base = await coloredCanvas(panelColor, width, H, assets);
+  // metallic goes on the flat colour BEFORE glass/dents/plating so only the panel gets the sheen
+  if (config.metallic && isHex(panelColor)) base = await applyMetallic(base, assets);
 
   const compose = async (key: string, mode: "center" | "manual"): Promise<boolean> => {
     const bytes = await assets.get(key);

@@ -164,6 +164,8 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 app.post("/api/door/image", async (c) => {
   const config = await prepareConfig(c.env.DB, await c.req.json<DoorConfig>());
+  // metallic finish ON by default; ?fx=off renders the old flat look for comparison
+  config.metallic = c.req.query("fx") !== "off";
   const png = await renderPng(config, makeAssets(c.env));
   return new Response(png, { headers: { "content-type": "image/png", "cache-control": "no-store" } });
 });

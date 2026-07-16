@@ -97,6 +97,27 @@ export async function coloredCanvas(color: string | null | undefined, w: number,
   return solid(w, h, 0x3f, 0x41, 0x45);
 }
 
+// Satin-metallic finish: scale every pixel's RGB by a single grayscale sheen texture (sheen/128),
+// so highlights (>128) lighten and shadows (<128) darken while the R:G:B ratio — i.e. the exact
+// picked colour/hue — is preserved. (A blend mode like soft-light is non-linear per channel and
+// hue-shifts dark colours, e.g. anthracite→navy.) One reusable texture, tinted by the colour below.
+export async function applyMetallic(base: PhotonImage, assets: AssetLoader): Promise<PhotonImage> {
+  const bytes = await assets.get("fx/metallic-sheen.png");
+  if (!bytes) return base;
+  const w = base.get_width(), h = base.get_height();
+  const sheen = resize(load(bytes), w, h, SamplingFilter.Triangle);
+  const bp = base.get_raw_pixels();
+  const sp = sheen.get_raw_pixels();
+  for (let i = 0; i < bp.length; i += 4) {
+    const f = sp[i] / 128; // sheen luminance → lightness factor (hue-preserving)
+    const r = bp[i] * f, g = bp[i + 1] * f, b = bp[i + 2] * f;
+    bp[i] = r > 255 ? 255 : r;
+    bp[i + 1] = g > 255 ? 255 : g;
+    bp[i + 2] = b > 255 ? 255 : b;
+  }
+  return track(new PhotonImage(bp, w, h));
+}
+
 // crop the center WxH out of a larger image (Intervention insert 'center', clipped)
 export function centerClip(img: PhotonImage, w: number, h: number) {
   const x = Math.trunc((img.get_width() - w) / 2);
