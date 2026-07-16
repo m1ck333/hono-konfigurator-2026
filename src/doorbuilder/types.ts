@@ -3,14 +3,16 @@ import {
   load,
   frameElement,
   fitCover,
+  crop,
   insertAnchor,
   blank,
   wm,
+  seeThroughGlass,
   type AssetLoader,
   type PhotonImage,
   type Anchor,
 } from "./photon";
-import type { DoorConfig } from "./index";
+import { sceneKeyFor, GLASS_FROST, type DoorConfig } from "./index";
 
 const RATIO = 3.5;
 const FRAME_WIDTH = 22;
@@ -92,6 +94,11 @@ async function addSideGlassPanels(image: PhotonImage, config: DoorConfig, assets
   const sideGlass = () => load(sideGlassBytes);
   const glassHeight = image.get_height() - FRAME_WIDTH;
 
+  // see-through backdrop (full-height slice for the side panels)
+  const sceneKey = sceneKeyFor(config);
+  const sceneBytes = sceneKey ? await assets.get(sceneKey) : null;
+  const scene = sceneBytes ? load(sceneBytes) : null;
+
   const addPanels =
     (side === "left" || side === "both" ? leftGW * numLeft : 0) +
     (side === "right" || side === "both" ? rightGW * numRight : 0);
@@ -105,11 +112,11 @@ async function addSideGlassPanels(image: PhotonImage, config: DoorConfig, assets
 
   if (side === "left" || side === "both") {
     const posSide: "left" | "right" = interior ? "right" : "left";
-    await insertGlassPanelWithPillars(transparent, sideGlass, leftGW, glassHeight, frameColor, numLeft, posSide, assets);
+    await insertGlassPanelWithPillars(transparent, sideGlass, leftGW, glassHeight, frameColor, numLeft, posSide, assets, scene);
   }
   if (side === "right" || side === "both") {
     const posSide: "left" | "right" = interior ? "left" : "right";
-    await insertGlassPanelWithPillars(transparent, sideGlass, rightGW, glassHeight, frameColor, numRight, posSide, assets);
+    await insertGlassPanelWithPillars(transparent, sideGlass, rightGW, glassHeight, frameColor, numRight, posSide, assets, scene);
   }
   return transparent;
 }
@@ -122,7 +129,8 @@ async function insertGlassPanelWithPillars(
   frameColor: string,
   numPanels: number,
   positionSide: "left" | "right",
-  assets: AssetLoader
+  assets: AssetLoader,
+  scene: PhotonImage | null
 ) {
   const pillarV = await frameElement("frame/pillar-V.png", FRAME_WIDTH, glassHeight + FRAME_WIDTH, frameColor, assets);
   const pillarH = await frameElement("frame/pillar-H.png", Math.max(1, glassWidth - FRAME_WIDTH), FRAME_WIDTH, frameColor, assets);
@@ -130,7 +138,8 @@ async function insertGlassPanelWithPillars(
   for (let i = 0; i < numPanels; i++) {
     const glassX = FRAME_WIDTH + glassWidth * i;
     const pillarX = glassWidth * (i + 1);
-    const glassClone = fitCover(sideGlass(), Math.max(1, glassWidth - FRAME_WIDTH), glassHeight);
+    let glassClone = fitCover(sideGlass(), Math.max(1, glassWidth - FRAME_WIDTH), glassHeight);
+    if (scene) glassClone = seeThroughGlass(glassClone, scene, GLASS_FROST);
     insertAnchor(canvas, glassClone, `top-${positionSide}` as Anchor, glassX, 0);
     insertAnchor(canvas, pillarV, `top-${positionSide}` as Anchor, pillarX, 0);
     insertAnchor(canvas, pillarH, `bottom-${positionSide}` as Anchor, glassX, 0);
@@ -153,7 +162,16 @@ async function addTransom(image: PhotonImage, config: DoorConfig, assets: AssetL
   const width = image.get_width();
   const pillarWidth = FRAME_WIDTH;
 
-  const glass = fitCover(load(glassBytes), width, upperGlassHeight);
+  let glass = fitCover(load(glassBytes), width, upperGlassHeight);
+  // see-through backdrop — the transom sits high, so it shows the TOP slice of the scene
+  // (sky/ceiling-light) rather than the center, keeping it coherent with the panels below.
+  const sceneKey = sceneKeyFor(config);
+  const sceneBytes = sceneKey ? await assets.get(sceneKey) : null;
+  if (sceneBytes) {
+    const scene = load(sceneBytes);
+    const topSlice = crop(scene, 0, 0, scene.get_width(), Math.max(1, Math.trunc(scene.get_height() * 0.5)));
+    glass = seeThroughGlass(glass, topSlice, GLASS_FROST);
+  }
   const pillar = await frameElement("frame/pillar-H.png", width, pillarWidth, frameColor, assets);
 
   // frame-colored base; glass sits BELOW the top frame band (offset by pillarWidth) so the

@@ -166,6 +166,8 @@ app.post("/api/door/image", async (c) => {
   const config = await prepareConfig(c.env.DB, await c.req.json<DoorConfig>());
   // metallic finish ON by default; ?fx=off renders the old flat look for comparison
   config.metallic = c.req.query("fx") !== "off";
+  // see-through glass (blurred interior/exterior behind the panes) ON by default; ?glass=flat opts out
+  config.seeThrough = c.req.query("glass") !== "flat";
   const png = await renderPng(config, makeAssets(c.env));
   return new Response(png, { headers: { "content-type": "image/png", "cache-control": "no-store" } });
 });
@@ -173,6 +175,9 @@ app.post("/api/door/image", async (c) => {
 // both exterior + interior renders, returned as base64 PNGs ({ innerDoor, outerDoor }).
 app.post("/api/door/both-sides-images", async (c) => {
   const base = await prepareConfig(c.env.DB, await c.req.json<DoorConfig>());
+  // match the live configurator look (metallic panels + see-through glass) in the printed offer
+  base.metallic = true;
+  base.seeThrough = true;
   const assets = makeAssets(c.env);
   const outerDoor = bytesToBase64(await renderPng({ ...base, interiorDoorShown: false }, assets));
   const innerDoor = bytesToBase64(await renderPng({ ...base, interiorDoorShown: true }, assets));

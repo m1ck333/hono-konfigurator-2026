@@ -118,6 +118,29 @@ export async function applyMetallic(base: PhotonImage, assets: AssetLoader): Pro
   return track(new PhotonImage(bp, w, h));
 }
 
+// See-through privacy glass: composite a heavily-blurred backdrop scene BEHIND translucent
+// frosted glass, so the pane reads as real glass with a room/garden behind it rather than a
+// flat frosted panel. `glassTile` is the frost texture already sized to the pane — its alpha
+// encodes the opening shape (full rectangle for side/transom, the cut-out silhouette for a leaf
+// pane). `scene` is the blurred backdrop; we cover-fit it to the pane so each opening reveals its
+// own slice. Result keeps the glass tile's exact alpha, RGB = frost*w + scene*(1-w). Lower w =
+// more see-through. (Same hue-preserving per-pixel approach as applyMetallic.)
+export function seeThroughGlass(glassTile: PhotonImage, scene: PhotonImage, frostWeight: number): PhotonImage {
+  const w = glassTile.get_width(), h = glassTile.get_height();
+  const bg = fitCover(scene, w, h);
+  const gp = glassTile.get_raw_pixels();
+  const bp = bg.get_raw_pixels();
+  const out = new Uint8Array(gp.length);
+  const kf = frostWeight, ks = 1 - frostWeight;
+  for (let i = 0; i < gp.length; i += 4) {
+    out[i] = gp[i] * kf + bp[i] * ks;
+    out[i + 1] = gp[i + 1] * kf + bp[i + 1] * ks;
+    out[i + 2] = gp[i + 2] * kf + bp[i + 2] * ks;
+    out[i + 3] = gp[i + 3]; // keep frost/opening alpha so only the pane is placed
+  }
+  return track(new PhotonImage(out, w, h));
+}
+
 // crop the center WxH out of a larger image (Intervention insert 'center', clipped)
 export function centerClip(img: PhotonImage, w: number, h: number) {
   const x = Math.trunc((img.get_width() - w) / 2);

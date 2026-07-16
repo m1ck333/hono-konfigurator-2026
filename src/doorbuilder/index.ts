@@ -5,6 +5,7 @@ import {
   isHex,
   load,
   centerClip,
+  seeThroughGlass,
   insertAnchor,
   frameElement,
   fliph,
@@ -19,6 +20,17 @@ export { freeArena } from "./photon";
 
 export const RATIO = 3.5;
 export const FRAME_WIDTH = 22;
+
+// See-through glass: fraction of the frost texture kept in the blend (rest is the backdrop scene
+// showing through). Lower = more see-through. 0.44 = the "middle" strength signed off in preview.
+export const GLASS_FROST = 0.44;
+
+// Which blurred backdrop shows behind the glass: from OUTSIDE you glimpse the interior, from
+// INSIDE you glimpse the exterior. null = feature off (flat frosted glass, no scene behind).
+export function sceneKeyFor(config: DoorConfig): string | null {
+  if (!config.seeThrough) return null;
+  return config.interiorDoorShown ? "fx/scene-exterior.png" : "fx/scene-interior.png";
+}
 
 export interface DoorConfig {
   "model-name": string;
@@ -36,6 +48,7 @@ export interface DoorConfig {
   "right-side-glass-number"?: number;
   interiorDoorShown?: boolean;
   metallic?: boolean; // satin-metallic finish on the coloured panel/frame
+  seeThrough?: boolean; // translucent glass with a blurred interior/exterior scene behind it
   has_glass?: number; // filled by the render endpoint from the doors table
   innerGlassTexture?: string | null; // door-folder texture for the selected inner-glass-id
   sideGlassTexture?: string | null;  // glass/ or sideglass/ texture for the side panels
@@ -80,10 +93,19 @@ export async function buildLeaf(
   // inner glass: selected texture (from inner-glass-id) → model's staklo default → sandblast backup
   if (config.has_glass) {
     const tex = config.innerGlassTexture;
-    let done = false;
-    if (tex) done = await compose(`${doorDir}/${tex}.png`, "center");
-    if (!done) done = await compose(`${doorDir}/staklo.png`, "center");
-    if (!done) await compose(`${doorDir}/sandblast.png`, "center");
+    const glassBytes =
+      (tex ? await assets.get(`${doorDir}/${tex}.png`) : null) ??
+      (await assets.get(`${doorDir}/staklo.png`)) ??
+      (await assets.get(`${doorDir}/sandblast.png`));
+    if (glassBytes) {
+      const g = load(glassBytes);
+      if (isHalfPanel) fliph(g);
+      let tile = centerClip(g, width, H);
+      const sceneKey = sceneKeyFor(config);
+      const sceneBytes = sceneKey ? await assets.get(sceneKey) : null;
+      if (sceneBytes) tile = seeThroughGlass(tile, load(sceneBytes), GLASS_FROST);
+      insertAnchor(base, tile, "top-left", 0, 0);
+    }
   }
   await compose(`${doorDir}/udubljenje.png`, "center"); // dent
   await compose(`${doorDir}/okvir.png`, "manual"); // glass frame
