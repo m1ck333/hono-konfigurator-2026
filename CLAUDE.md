@@ -96,8 +96,8 @@ adminMarkup = admin's `default=1` markup (non-admins only); userMarkup = user's 
 - `npm run dev` — `wrangler dev` (local workerd + local D1/R2)
 - `npm run db:local` — apply migrations + seed to local D1
 - `npm run deploy` — `wrangler deploy`
-- `npm test` — validate the Worker vs frozen Laravel fixtures (contract + render RMSE + smoke). See `tests/README.md`.
-- `npm run test:capture` — re-freeze `tests/fixtures/` from live Laravel (only while the droplet exists).
+- `npm test` — contract + price parity vs the frozen Laravel oracle, render RMSE (now a regression net), smoke. See `tests/README.md`.
+- `node tests/rebaseline-render.mjs` — re-baseline ONLY the render PNGs to the current Worker after an INTENTIONAL renderer change. (The old `test:capture` re-froze everything from live Laravel — DEAD now, the droplet is deleted.)
 
 ## Testing (run after any BE change)
 `tests/` checks the Worker against **Laravel's captured output** (the oracle): contract (endpoint
