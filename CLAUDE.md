@@ -59,7 +59,8 @@ droplet. Same API contract, same door-image compositing output.
   `systems/{id}.png`, `equipment/{cat}/{id}.png`, `houses/{id}.png`, `house-colors/{id}.png`.
   DB path columns hold these keys; served at `GET /storage/<key>`. See `STORAGE.md`.
 - **Door compositing:** follows Laravel `DoorBuilder` exactly (RATIO=3.5, FRAME_WIDTH=22,
-  Intervention anchor→top-left via `anchor.ts`). Match live Laravel output; validate with `validate.mjs`.
+  Intervention anchor→top-left via `anchor.ts`). Was matched to live Laravel output during the port;
+  now regression-tested via `tests/` (`npm test` — see the render RMSE net).
 - **Errors:** fail loud in logs (`console.error`), return a clean JSON error to the client. Never
   silently skip a missing asset the way the old Laravel `addTransom` did — log it.
 - **No secrets in code:** `JWT_SECRET` comes from env/`wrangler.jsonc` vars (dev) or a secret (prod).
