@@ -1,5 +1,8 @@
 {
-  "source": "https://konfigurator-api.online",
-  "capturedAt": "2026-07-15T10:40:47.668Z",
+  "oracleSource": "https://konfigurator-api.online (Laravel prod, since deleted)",
+  "oracleCapturedAt": "2026-07-15T10:40:47.668Z",
+  "note": "contract.json + prices.json are the frozen LARAVEL oracle (structure + money) and must keep holding. render/*.png were RE-BASELINED to the Worker's current look after intentional visual changes (metallic + clean/see-through glass), so the render RMSE check is now a regression detector, not Laravel pixel-parity. Re-baseline render again after any intended render change: `node tests/rebaseline-render.mjs`.",
+  "renderSource": "https://konfigurator-be.m1ck33kc1m.workers.dev (Worker)",
+  "renderRebaselinedAt": "2026-07-17",
   "cases": 34
 }
