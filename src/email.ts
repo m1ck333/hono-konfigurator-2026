@@ -65,8 +65,13 @@ function buildHtml(inq: Inquiry): string {
     )
     .join("");
 
-  const sections = Array.isArray(inq.configuration)
-    ? (inq.configuration as Array<{ title?: string; data?: unknown }>)
+  // The FE sends `configuration` as an OBJECT keyed by section ({ construction:{title,data}, ... }),
+  // not an array — accept both so the settings actually render (not just the door image).
+  const rawCfg = inq.configuration;
+  const sections: Array<{ title?: string; data?: unknown }> = Array.isArray(rawCfg)
+    ? (rawCfg as Array<{ title?: string; data?: unknown }>)
+    : rawCfg && typeof rawCfg === "object"
+    ? (Object.values(rawCfg as Record<string, unknown>) as Array<{ title?: string; data?: unknown }>)
     : [];
   const configHtml = sections
     .map((s) => {

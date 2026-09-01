@@ -191,7 +191,7 @@ registerPrice(app as never);
 app.post("/api/submit-inquiry", async (c) => {
   const b = await c.req.json<any>();
   await c.env.DB.prepare("INSERT INTO inquiries (name,email,phone,message,config) VALUES (?,?,?,?,?)")
-    .bind(b.name ?? null, b.email ?? null, b.phone ?? null, b.message ?? null, JSON.stringify(b.config ?? {})).run();
+    .bind(b.name ?? null, b.email ?? null, b.phone ?? null, b.message ?? null, JSON.stringify(b.configuration ?? b.config ?? {})).run();
   // fire-and-forget email notification (no-op unless RESEND_API_KEY is configured)
   c.executionCtx.waitUntil(sendInquiryEmail(c.env, b));
   return c.json({ ok: true });
