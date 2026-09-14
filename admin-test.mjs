@@ -5,7 +5,8 @@ const j = async (m, p, b, t) => {
   return { status: r.status, body: await r.json().catch(() => null) };
 };
 try {
-  const login = await j("POST", "/api/login", { username: "testadmin", password: "Algreen2026!!!" });
+  // Local integration test — set ADMIN_TEST_USER / ADMIN_TEST_PASSWORD in your env (never commit a real password).
+  const login = await j("POST", "/api/login", { username: process.env.ADMIN_TEST_USER || "Admin", password: process.env.ADMIN_TEST_PASSWORD });
   console.log("login:", login.status, login.body?.token ? "token(role=" + login.body.user.role + ")" : JSON.stringify(login.body));
   const t = login.body?.token;
   const create = await j("POST", "/api/colors", { color_code: "TEST-1", price: 5, is_shown: 1 }, t);

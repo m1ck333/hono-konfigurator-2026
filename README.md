@@ -18,7 +18,7 @@ npx wrangler r2 object put konfigurator-assets/equipment/1.png --local --file=as
 npm run dev            # wrangler dev — local workerd on :8787
 node be-test.mjs       # smoke-test every endpoint in local workerd
 ```
-Seeded admin: **Admin / Algreen2026!!!**
+Seeded admin username: **Admin** (local dev seed). Password comes from the Laravel migration — keep it in your password manager, and set `ADMIN_TEST_PASSWORD` (optionally `ADMIN_TEST_USER`) for `admin-test.mjs`. Never commit a real password.
 
 ## Deploy to Cloudflare (needs an account)
 ```bash

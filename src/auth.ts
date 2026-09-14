@@ -50,6 +50,8 @@ export async function requireAuth(c: Context, next: Next) {
 
 export async function requireAdmin(c: Context, next: Next) {
   const user = c.get("user") as JwtUser | undefined;
-  if (!user || user.role !== "admin") return c.json({ error: "forbidden" }, 403);
+  // superadmin (owner) has every admin power plus overrides; both reach admin-gated routes.
+  if (!user || (user.role !== "admin" && user.role !== "superadmin"))
+    return c.json({ error: "forbidden" }, 403);
   await next();
 }

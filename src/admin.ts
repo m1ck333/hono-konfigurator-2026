@@ -1,9 +1,19 @@
-import type { Hono } from "hono";
-import { requireAuth, requireAdmin, hashPassword, type JwtUser } from "./auth";
+import type { Context, Hono } from "hono";
+import { requireAuth, requireAdmin, hashPassword, verifyPassword, type JwtUser } from "./auth";
 
 type Env = { Bindings: { DB: D1Database; ASSETS: R2Bucket }; Variables: { user: JwtUser } };
 
 const q = (id: string) => `"${id}"`;
+
+// Staff (admin/superadmin) accounts may only be managed by a superadmin. A plain admin may
+// create/edit/delete dealer/user accounts, never staff — enforced on every user-mutating route.
+const isStaffRole = (r?: string | null): boolean => r === "admin" || r === "superadmin";
+async function callerMayManageTarget(c: Context<Env>, targetId: string | undefined): Promise<boolean> {
+  if (c.get("user").role === "superadmin") return true;
+  if (!targetId) return false;
+  const target = await c.env.DB.prepare("SELECT role FROM users WHERE id=?").bind(targetId).first<{ role: string | null }>();
+  return !isStaffRole(target?.role ?? null);
+}
 
 // column names of a table (minus id), cached per isolate
 const colCache: Record<string, string[]> = {};
@@ -82,27 +92,57 @@ export function registerAdmin(app: Hono<Env>) {
   app.post("/api/register", requireAuth, requireAdmin, async (c) => {
     const b = await c.req.json<any>();
     if (!b.username || !b.password) return c.json({ error: "username and password required" }, 400);
+    // Only a superadmin may create staff (admin/superadmin) accounts; a plain admin can only make dealers/users.
+    if (isStaffRole(b.role) && c.get("user").role !== "superadmin")
+      return c.json({ error: "only a superadmin can create admin accounts" }, 403);
     try {
-      const r = await c.env.DB.prepare("INSERT INTO users (username, password, role) VALUES (?,?,?)")
-        .bind(b.username, await hashPassword(b.password), b.role || "user").run();
+      const r = await c.env.DB.prepare("INSERT INTO users (username, password, role, city) VALUES (?,?,?,?)")
+        .bind(b.username, await hashPassword(b.password), b.role || "user", b.city ?? null).run();
       return c.json({ success: true, id: r.meta.last_row_id }, 201);
     } catch { return c.json({ error: "username taken" }, 409); }
   });
   app.delete("/api/users/:id", requireAuth, requireAdmin, async (c) => {
+    if (!(await callerMayManageTarget(c, c.req.param("id")))) return c.json({ error: "only a superadmin can delete admin accounts" }, 403);
     await c.env.DB.prepare("DELETE FROM users WHERE id=?").bind(c.req.param("id")).run();
     return c.json({ success: true });
   });
-  app.post("/api/password-update", requireAuth, async (c) => {
+  // The FE calls this with PUT (Laravel legacy); accept both PUT and POST so it can't drift again.
+  // The change-password form sends { current_password, new_password, new_password_confirmation };
+  // an admin reset sends { password }. Accept both, and verify the current password when supplied.
+  app.on(["POST", "PUT"], "/api/password-update", requireAuth, async (c) => {
     const user = c.get("user");
-    const { password } = await c.req.json<{ password: string }>();
-    if (!password) return c.json({ error: "password required" }, 400);
-    await c.env.DB.prepare("UPDATE users SET password=? WHERE id=?").bind(await hashPassword(password), user.id).run();
+    const b = await c.req.json<any>();
+    const newPassword = b.new_password ?? b.password;
+    if (!newPassword) return c.json({ error: "password required" }, 400);
+    if (b.current_password !== undefined) {
+      const row = await c.env.DB.prepare("SELECT password FROM users WHERE id=?").bind(user.id).first<{ password: string }>();
+      if (!row || !(await verifyPassword(String(b.current_password), row.password)))
+        return c.json({ error: "current password is incorrect", messageTranslation: "auth-messages.current-password-is-incorrect" }, 400);
+    }
+    await c.env.DB.prepare("UPDATE users SET password=? WHERE id=?").bind(await hashPassword(newPassword), user.id).run();
+    return c.json({ success: true });
+  });
+  // Self-service profile update (PersonalInfo form) — updates the CALLER's own row (id from token).
+  // Never lets a user change their own role or id (no self-escalation). FE uses PUT; accept POST too.
+  app.on(["PUT", "POST"], "/api/update", requireAuth, async (c) => {
+    const cols = await columns(c.env.DB, "users");
+    const body = await c.req.json<Record<string, unknown>>();
+    delete body.role;
+    delete body.id;
+    if (body.password) body.password = await hashPassword(String(body.password));
+    const keys = cols.filter((k) => k in body);
+    if (!keys.length) return c.json({ success: true });
+    await c.env.DB.prepare(`UPDATE users SET ${keys.map((k) => `${q(k)}=?`).join(",")} WHERE id=?`)
+      .bind(...keys.map((k) => body[k] as never), c.get("user").id).run();
     return c.json({ success: true });
   });
   // edit / delete a user by id (FE uses the SINGULAR /api/user/:id)
   app.put("/api/user/:id", requireAuth, requireAdmin, async (c) => {
     const cols = await columns(c.env.DB, "users");
     const body = await c.req.json<Record<string, unknown>>();
+    // Staff management is superadmin-only: block editing a staff account, or promoting anyone to staff.
+    if ((!(await callerMayManageTarget(c, c.req.param("id"))) || (isStaffRole(body.role as string) && c.get("user").role !== "superadmin")))
+      return c.json({ error: "only a superadmin can manage admin accounts" }, 403);
     if (body.password) body.password = await hashPassword(String(body.password));
     const keys = cols.filter((k) => k in body);
     if (!keys.length) return c.json({ success: true });
@@ -111,6 +151,7 @@ export function registerAdmin(app: Hono<Env>) {
     return c.json({ success: true });
   });
   app.delete("/api/user/:id", requireAuth, requireAdmin, async (c) => {
+    if (!(await callerMayManageTarget(c, c.req.param("id")))) return c.json({ error: "only a superadmin can delete admin accounts" }, 403);
     await c.env.DB.prepare("DELETE FROM users WHERE id=?").bind(c.req.param("id")).run();
     return c.json({ success: true });
   });

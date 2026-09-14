@@ -46,6 +46,9 @@ app.onError((err, c) => {
 function assetCandidates(rawPath: string): string[] {
   let p = decodeURIComponent(rawPath).replace(/^\/+/, "");
   p = p.replace(/^storage\//, "").replace(/^api\//, "");
+  // Inquiry door images are private — never served through the public asset route.
+  // They are only reachable via GET /api/admin/inquiries/:id/image/:which (admin-auth'd).
+  if (p.startsWith("inquiries/")) return [];
   const cands = [p];
   // The FE requests `thumbnails/<category>/...` (sideglass, equipment, glass, …) but our R2 keys
   // are `<category>/...` — strip the `thumbnails/` prefix as a fallback.
@@ -190,11 +193,43 @@ registerPrice(app as never);
 // ============================================================ offers
 app.post("/api/submit-inquiry", async (c) => {
   const b = await c.req.json<any>();
-  await c.env.DB.prepare("INSERT INTO inquiries (name,email,phone,message,config) VALUES (?,?,?,?,?)")
-    .bind(b.name ?? null, b.email ?? null, b.phone ?? null, b.message ?? null, JSON.stringify(b.configuration ?? b.config ?? {})).run();
-  // fire-and-forget email notification (no-op unless RESEND_API_KEY is configured)
+  // Store EVERY field the form collects (FE sends `fullName`, not `name`; plus city/postalCode/street).
+  // Wrapped so a DB failure never blocks the email — the notification is the thing we can't afford to lose.
+  let id: number | undefined;
+  try {
+    const res = await c.env.DB
+      .prepare("INSERT INTO inquiries (name,email,phone,city,postal_code,street,message,config) VALUES (?,?,?,?,?,?,?,?)")
+      .bind(
+        b.fullName ?? b.name ?? null,
+        b.email ?? null,
+        b.phone ?? null,
+        b.city ?? null,
+        b.postalCode ?? null,
+        b.street ?? null,
+        b.message ?? null,
+        JSON.stringify(b.configuration ?? b.config ?? {})
+      )
+      .run();
+    id = Number(res.meta.last_row_id) || undefined;
+  } catch (e) {
+    console.error("inquiry DB insert failed (email will still be sent)", e);
+  }
+  // Persist the two rendered door images (base64 PNG) to R2 so admins can view/print them later
+  // (best-effort; keyed by the new inquiry id). Served back only via the admin image endpoint.
+  const putImg = async (which: "outer" | "inner", b64?: string | null) => {
+    if (!b64 || !id) return;
+    try {
+      const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+      await c.env.ASSETS.put(`inquiries/${id}/${which}.png`, bytes, { httpMetadata: { contentType: "image/png" } });
+    } catch (e) {
+      console.error("inquiry image store failed", which, e);
+    }
+  };
+  c.executionCtx.waitUntil(putImg("outer", b.outerDoorImage));
+  c.executionCtx.waitUntil(putImg("inner", b.innerDoorImage));
+  // fire-and-forget email notification (no-op unless SMTP is configured) — includes both door images
   c.executionCtx.waitUntil(sendInquiryEmail(c.env, b));
-  return c.json({ ok: true });
+  return c.json({ ok: true, id });
 });
 
 app.post("/api/printed-contents", requireAuth, async (c) => {
@@ -249,6 +284,58 @@ registerAdmin(app as never);
 
 app.get("/api/admin/inquiries", requireAuth, requireAdmin, async (c) =>
   c.json({ inquiries: (await c.env.DB.prepare("SELECT * FROM inquiries ORDER BY id DESC").all()).results }));
+// Serve a stored inquiry door image (private — admins only, so employers can view/print/share them).
+app.get("/api/admin/inquiries/:id/image/:which", requireAuth, requireAdmin, async (c) => {
+  const id = Number(c.req.param("id"));
+  const which = c.req.param("which") === "inner" ? "inner" : "outer";
+  const obj = await c.env.ASSETS.get(`inquiries/${id}/${which}.png`);
+  if (!obj) return c.json({ error: "not found" }, 404);
+  return new Response(obj.body, {
+    headers: { "content-type": "image/png", "cache-control": "private, max-age=3600", etag: obj.httpEtag },
+  });
+});
+// Lock an inquiry (claim it, with an optional note). Any admin/superadmin.
+app.post("/api/admin/inquiries/:id/lock", requireAuth, requireAdmin, async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!id) return c.json({ error: "bad id" }, 400);
+  const body = await c.req.json<{ note?: string }>().catch(() => ({} as { note?: string }));
+  const user = c.get("user");
+  await c.env.DB
+    .prepare("UPDATE inquiries SET locked_by=?, locked_at=datetime('now'), lock_note=? WHERE id=?")
+    .bind(user.username, body.note ?? null, id)
+    .run();
+  return c.json({ ok: true });
+});
+// Unlock an inquiry — only the admin who locked it, or a superadmin (override).
+app.post("/api/admin/inquiries/:id/unlock", requireAuth, requireAdmin, async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!id) return c.json({ error: "bad id" }, 400);
+  const user = c.get("user");
+  const row = await c.env.DB.prepare("SELECT locked_by FROM inquiries WHERE id=?").bind(id).first<{ locked_by: string | null }>();
+  if (!row) return c.json({ error: "not found" }, 404);
+  if (row.locked_by && row.locked_by !== user.username && user.role !== "superadmin")
+    return c.json({ error: "locked by another admin" }, 403);
+  await c.env.DB.prepare("UPDATE inquiries SET locked_by=NULL, locked_at=NULL, lock_note=NULL WHERE id=?").bind(id).run();
+  return c.json({ ok: true });
+});
+// Delete an inquiry (D1 row + its stored door images). Admin-only. A locked inquiry must be unlocked first.
+app.delete("/api/admin/inquiries/:id", requireAuth, requireAdmin, async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!id) return c.json({ error: "bad id" }, 400);
+  const row = await c.env.DB.prepare("SELECT locked_by FROM inquiries WHERE id=?").bind(id).first<{ locked_by: string | null }>();
+  if (row?.locked_by) return c.json({ error: "inquiry is locked" }, 409);
+  await c.env.DB.prepare("DELETE FROM inquiries WHERE id=?").bind(id).run();
+  c.executionCtx.waitUntil(
+    Promise.all([
+      c.env.ASSETS.delete(`inquiries/${id}/outer.png`),
+      c.env.ASSETS.delete(`inquiries/${id}/inner.png`),
+    ]).then(
+      () => {},
+      (e) => console.error("inquiry image cleanup failed", id, e)
+    )
+  );
+  return c.json({ ok: true });
+});
 app.get("/api/admin/printed-contents", requireAuth, requireAdmin, async (c) =>
   c.json({ printedContents: (await c.env.DB.prepare("SELECT pc.id, pc.user_id, u.username, pc.created_at FROM printed_contents pc JOIN users u ON u.id=pc.user_id ORDER BY pc.id DESC").all()).results }));
 
