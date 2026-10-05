@@ -35,9 +35,10 @@ app.use("*", (c, next) =>
   cors({ origin: c.env.ALLOWED_ORIGIN || "*", credentials: true })(c, next)
 );
 
-// Clean JSON errors instead of stack traces / HTML.
+// Clean JSON errors instead of stack traces / HTML. Log method + path + stack so the failing
+// request is self-explanatory in Cloudflare Workers Logs (observability is enabled in wrangler.jsonc).
 app.onError((err, c) => {
-  console.error("unhandled error", err);
+  console.error("unhandled error", c.req.method, c.req.path, (err && (err.stack || err.message)) || err);
   return c.json({ error: "internal error" }, 500);
 });
 // Asset resolver — the FE builds image URLs three inconsistent ways:
