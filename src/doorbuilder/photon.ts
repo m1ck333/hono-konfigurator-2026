@@ -141,11 +141,21 @@ export function seeThroughGlass(glassTile: PhotonImage, scene: PhotonImage, fros
   return track(new PhotonImage(out, w, h));
 }
 
-// crop the center WxH out of a larger image (Intervention insert 'center', clipped)
+// crop the center WxH out of a larger image (Intervention insert 'center', clipped).
+// When the door is LARGER than the source layer (big dimensions), we can't crop a WxH region out
+// of a smaller image — that produced a negative/out-of-bounds crop and crashed photon (500). In
+// that case center the source onto a WxH transparent canvas instead (pad), which is what
+// Intervention's insert('center') does and keeps the WxH output contract downstream expects.
 export function centerClip(img: PhotonImage, w: number, h: number) {
-  const x = Math.trunc((img.get_width() - w) / 2);
-  const y = Math.trunc((img.get_height() - h) / 2);
-  return crop(img, x, y, x + w, y + h);
+  const iw = img.get_width(), ih = img.get_height();
+  if (w <= iw && h <= ih) {
+    const x = Math.trunc((iw - w) / 2);
+    const y = Math.trunc((ih - h) / 2);
+    return crop(img, x, y, x + w, y + h);
+  }
+  const canvas = blank(w, h);
+  insertAnchor(canvas, img, "center", 0, 0);
+  return canvas;
 }
 
 // "fit" cover-crop to exactly w x h (Intervention fit())
